@@ -2,6 +2,7 @@
 
 #![cfg(test)]
 
+mod blend;
 mod color_matrix;
 mod component_transfer;
 mod composite;

@@ -2,9 +2,9 @@
 //! filtered either by one `<filter>` in user space or by a list of filter functions.
 
 use filtra::types::{
-    Color, ColorInterpolation, ColorMatrix, ComponentTransfer, Composite, CompositeOperator,
-    Filter, FilterFunction, Flood, Input, Merge, Node, Offset, Primitive, Rect, Subregion, Tile,
-    TransferFunction,
+    Blend, BlendMode, Color, ColorInterpolation, ColorMatrix, ComponentTransfer, Composite,
+    CompositeOperator, Filter, FilterFunction, Flood, Input, Merge, Node, Offset, Primitive, Rect,
+    Subregion, Tile, TransferFunction,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -73,6 +73,13 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
     for child in element.children().filter(XmlNode::is_element) {
         let input = |name| resolve_input(child, name, &results);
         let (primitive, inputs) = match child.tag_name().name() {
+            "feBlend" => {
+                let blend = Blend {
+                    mode: blend_mode(child),
+                    no_composite: child.has_attribute("no-composite"),
+                };
+                (Primitive::Blend(blend), vec![input("in"), input("in2")])
+            }
             "feColorMatrix" => (
                 Primitive::ColorMatrix(color_matrix(child)),
                 vec![input("in")],
@@ -156,6 +163,28 @@ fn color_interpolation(node: XmlNode<'_, '_>) -> Option<ColorInterpolation> {
             "linearRGB" => ColorInterpolation::LinearRgb,
             other => panic!("invalid color-interpolation-filters \"{other}\""),
         })
+}
+
+fn blend_mode(node: XmlNode<'_, '_>) -> BlendMode {
+    match node.attribute("mode").unwrap_or("normal") {
+        "normal" => BlendMode::Normal,
+        "multiply" => BlendMode::Multiply,
+        "screen" => BlendMode::Screen,
+        "overlay" => BlendMode::Overlay,
+        "darken" => BlendMode::Darken,
+        "lighten" => BlendMode::Lighten,
+        "color-dodge" => BlendMode::ColorDodge,
+        "color-burn" => BlendMode::ColorBurn,
+        "hard-light" => BlendMode::HardLight,
+        "soft-light" => BlendMode::SoftLight,
+        "difference" => BlendMode::Difference,
+        "exclusion" => BlendMode::Exclusion,
+        "hue" => BlendMode::Hue,
+        "saturation" => BlendMode::Saturation,
+        "color" => BlendMode::Color,
+        "luminosity" => BlendMode::Luminosity,
+        other => panic!("unsupported feBlend mode \"{other}\""),
+    }
 }
 
 fn color_matrix(node: XmlNode<'_, '_>) -> ColorMatrix {

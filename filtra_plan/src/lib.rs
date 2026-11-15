@@ -13,7 +13,7 @@ mod planner;
 mod rect;
 
 pub use buffers::{Buffers, assign_buffers};
-pub use filtra_types::CompositeOperator;
+pub use filtra_types::{BlendMode, CompositeOperator};
 pub use planner::plan;
 pub use rect::IntRect;
 
@@ -99,6 +99,19 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    /// Blends `src` into `backdrop`.
+    Blend {
+        /// The source.
+        src: ImageId,
+        /// The backdrop.
+        backdrop: ImageId,
+        /// The blend mode.
+        mode: BlendMode,
+        /// Whether the result is composited onto the backdrop with source over.
+        composite: bool,
+        /// The destination.
+        dst: ImageId,
+    },
     /// Stacks images with source over, the first one at the bottom.
     Merge {
         /// The sources.
@@ -138,7 +151,9 @@ impl Pass for Step {
             | Self::Tile { src, .. }
             | Self::ColorMatrix { src, .. }
             | Self::ComponentTransfer { src, .. } => ([Some(*src), None], &[]),
-            Self::Composite { src, backdrop, .. } => ([Some(*src), Some(*backdrop)], &[]),
+            Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
+                ([Some(*src), Some(*backdrop)], &[])
+            }
             Self::Merge { srcs, .. } => ([None, None], srcs),
         };
 
@@ -154,6 +169,7 @@ impl Pass for Step {
             | Self::Offset { dst, .. }
             | Self::Tile { dst, .. }
             | Self::Composite { dst, .. }
+            | Self::Blend { dst, .. }
             | Self::Merge { dst, .. }
             | Self::ColorMatrix { dst, .. }
             | Self::ComponentTransfer { dst, .. } => *dst,

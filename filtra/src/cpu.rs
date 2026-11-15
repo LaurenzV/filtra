@@ -1,4 +1,4 @@
-use filtra_kernels::{ColorSpace, IntRect, Pixmap, PorterDuff, Source, Target};
+use filtra_kernels::{BlendMode, ColorSpace, IntRect, Pixmap, PorterDuff, Source, Target};
 use filtra_plan::{CompositeOperator, Plan, Step};
 
 pub(crate) fn execute(plan: &Plan, source: &Pixmap) -> Pixmap {
@@ -59,6 +59,17 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
             let backdrop = read(buffers, image(*backdrop));
             composite(src, backdrop, *operator, target);
         }),
+        Step::Blend {
+            src,
+            backdrop,
+            mode,
+            composite,
+            dst,
+        } => write(buffers, image(*dst), |buffers, target| {
+            let src = read(buffers, image(*src));
+            let backdrop = read(buffers, image(*backdrop));
+            filtra_kernels::blend(src, backdrop, blend_mode(*mode), *composite, target);
+        }),
         Step::Merge { srcs, dst } => write(buffers, image(*dst), |buffers, target| {
             let srcs: Vec<Source<'_>> = srcs.iter().map(|src| read(buffers, image(*src))).collect();
             filtra_kernels::merge(&srcs, target);
@@ -89,6 +100,27 @@ fn write(buffers: &mut [Pixmap], dst: Image, f: impl FnOnce(&[Pixmap], Target<'_
 
 fn read(buffers: &[Pixmap], image: Image) -> Source<'_> {
     buffers[image.buffer].source(image.rect.x0, image.rect.y0)
+}
+
+fn blend_mode(mode: filtra_plan::BlendMode) -> BlendMode {
+    match mode {
+        filtra_plan::BlendMode::Normal => BlendMode::Normal,
+        filtra_plan::BlendMode::Multiply => BlendMode::Multiply,
+        filtra_plan::BlendMode::Screen => BlendMode::Screen,
+        filtra_plan::BlendMode::Overlay => BlendMode::Overlay,
+        filtra_plan::BlendMode::Darken => BlendMode::Darken,
+        filtra_plan::BlendMode::Lighten => BlendMode::Lighten,
+        filtra_plan::BlendMode::ColorDodge => BlendMode::ColorDodge,
+        filtra_plan::BlendMode::ColorBurn => BlendMode::ColorBurn,
+        filtra_plan::BlendMode::HardLight => BlendMode::HardLight,
+        filtra_plan::BlendMode::SoftLight => BlendMode::SoftLight,
+        filtra_plan::BlendMode::Difference => BlendMode::Difference,
+        filtra_plan::BlendMode::Exclusion => BlendMode::Exclusion,
+        filtra_plan::BlendMode::Hue => BlendMode::Hue,
+        filtra_plan::BlendMode::Saturation => BlendMode::Saturation,
+        filtra_plan::BlendMode::Color => BlendMode::Color,
+        filtra_plan::BlendMode::Luminosity => BlendMode::Luminosity,
+    }
 }
 
 fn color_space(space: filtra_plan::ColorSpace) -> ColorSpace {

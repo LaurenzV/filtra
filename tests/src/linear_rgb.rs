@@ -8,6 +8,11 @@ fn auto() {
 }
 
 #[test]
+fn blend() {
+    check("linear_rgb/blend");
+}
+
+#[test]
 fn color_matrix() {
     check("linear_rgb/color_matrix");
 }

@@ -138,6 +138,13 @@ impl<'a> Planner<'a> {
                 operator: composite.operator,
                 dst,
             },
+            (Primitive::Blend(blend), &[src, backdrop]) => Step::Blend {
+                src,
+                backdrop,
+                mode: blend.mode,
+                composite: !blend.no_composite,
+                dst,
+            },
             (Primitive::ColorMatrix(color_matrix), &[src]) => Step::ColorMatrix {
                 src,
                 dst,
