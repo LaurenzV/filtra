@@ -13,6 +13,11 @@ fn color_matrix() {
 }
 
 #[test]
+fn component_transfer() {
+    check("linear_rgb/component_transfer");
+}
+
+#[test]
 fn composite_arithmetic() {
     check("linear_rgb/composite_arithmetic");
 }
@@ -25,6 +30,11 @@ fn default() {
 #[test]
 fn merge() {
     check("linear_rgb/merge");
+}
+
+#[test]
+fn mixed() {
+    check("linear_rgb/mixed");
 }
 
 #[test]

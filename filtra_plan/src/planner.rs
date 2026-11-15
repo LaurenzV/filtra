@@ -1,4 +1,6 @@
-use filtra_types::{ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect};
+use filtra_types::{
+    ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect, TransferFunction,
+};
 
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
 
@@ -141,6 +143,16 @@ impl<'a> Planner<'a> {
                 dst,
                 matrix: matrix(color_matrix),
             },
+            (Primitive::ComponentTransfer(transfer), &[src]) => Step::ComponentTransfer {
+                src,
+                dst,
+                functions: [
+                    regions(&transfer.red),
+                    regions(&transfer.green),
+                    regions(&transfer.blue),
+                    regions(&transfer.alpha),
+                ],
+            },
             // TODO: The remaining primitives.
             _ => Step::Flood { dst, color: [0; 4] },
         };
@@ -255,6 +267,32 @@ fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
             0.0, 0.0, 0.0, 0.0, 0.0,
             0.2126, 0.7152, 0.0722, 0.0, 0.0,
         ],
+    }
+}
+
+fn regions(function: &TransferFunction) -> Vec<[f32; 2]> {
+    match function {
+        TransferFunction::Identity => vec![[0.0, 1.0]],
+        TransferFunction::Table(values) | TransferFunction::Discrete(values)
+            if values.is_empty() =>
+        {
+            vec![[0.0, 1.0]]
+        }
+        TransferFunction::Table(values) if values.len() == 1 => vec![[values[0], values[0]]],
+        TransferFunction::Table(values) => {
+            values.windows(2).map(|pair| [pair[0], pair[1]]).collect()
+        }
+        TransferFunction::Discrete(values) => values.iter().map(|&value| [value, value]).collect(),
+        TransferFunction::Linear { slope, intercept } => vec![[*intercept, slope + intercept]],
+        TransferFunction::Gamma {
+            amplitude,
+            exponent,
+            offset,
+        } => {
+            let gamma = |i: u8| amplitude * (f32::from(i) / 255.0).powf(*exponent) + offset;
+
+            (0..255).map(|i| [gamma(i), gamma(i + 1)]).collect()
+        }
     }
 }
 

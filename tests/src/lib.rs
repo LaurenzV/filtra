@@ -3,9 +3,11 @@
 #![cfg(test)]
 
 mod color_matrix;
+mod component_transfer;
 mod composite;
 mod filter;
 mod flood;
+mod functions;
 mod linear_rgb;
 mod merge;
 mod offset;

@@ -115,6 +115,16 @@ pub enum Step {
         /// A 4×5 matrix in row-major order, applied to `[R, G, B, A, 1]`.
         matrix: [f32; 20],
     },
+    /// Remaps the unpremultiplied channels of an image with a function per channel.
+    ComponentTransfer {
+        /// The source.
+        src: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// The functions of red, green, blue and alpha, as the values at the start and end of
+        /// equal regions of `[0, 1]`.
+        functions: [Vec<[f32; 2]>; 4],
+    },
 }
 
 impl Pass for Step {
@@ -126,7 +136,8 @@ impl Pass for Step {
             Self::Convert { src, .. }
             | Self::Offset { src, .. }
             | Self::Tile { src, .. }
-            | Self::ColorMatrix { src, .. } => ([Some(*src), None], &[]),
+            | Self::ColorMatrix { src, .. }
+            | Self::ComponentTransfer { src, .. } => ([Some(*src), None], &[]),
             Self::Composite { src, backdrop, .. } => ([Some(*src), Some(*backdrop)], &[]),
             Self::Merge { srcs, .. } => ([None, None], srcs),
         };
@@ -144,7 +155,8 @@ impl Pass for Step {
             | Self::Tile { dst, .. }
             | Self::Composite { dst, .. }
             | Self::Merge { dst, .. }
-            | Self::ColorMatrix { dst, .. } => *dst,
+            | Self::ColorMatrix { dst, .. }
+            | Self::ComponentTransfer { dst, .. } => *dst,
         }
     }
 }

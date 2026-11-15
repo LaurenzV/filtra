@@ -66,6 +66,14 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
         Step::ColorMatrix { src, dst, matrix } => write(buffers, image(*dst), |buffers, target| {
             filtra_kernels::color_matrix(read(buffers, image(*src)), target, matrix);
         }),
+        Step::ComponentTransfer {
+            src,
+            dst,
+            functions,
+        } => write(buffers, image(*dst), |buffers, target| {
+            let functions = functions.each_ref().map(Vec::as_slice);
+            filtra_kernels::component_transfer(read(buffers, image(*src)), target, functions);
+        }),
     }
 }
 
