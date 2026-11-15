@@ -40,6 +40,36 @@ impl Filter {
         &self.nodes
     }
 
+    /// The filter primitive subregion of each node, with missing attributes filled in (§9.4).
+    pub fn subregions(&self) -> Vec<Rect> {
+        let mut subregions: Vec<Rect> = Vec::with_capacity(self.nodes.len());
+
+        for node in &self.nodes {
+            // Missing attributes default to the union of the input subregions, or to the filter
+            // region for nodes without inputs, with a standard input, and for `feTile`.
+            let uses_region = matches!(node.primitive, Primitive::Tile(_))
+                || node
+                    .inputs
+                    .iter()
+                    .any(|input| matches!(input, Input::SourceGraphic | Input::SourceAlpha));
+
+            let default = node
+                .inputs
+                .iter()
+                .filter_map(|input| match input {
+                    Input::Result(index) => Some(subregions[*index]),
+                    _ => None,
+                })
+                .reduce(Rect::union)
+                .filter(|_| !uses_region)
+                .unwrap_or(self.region);
+
+            subregions.push(node.subregion.resolve(default));
+        }
+
+        subregions
+    }
+
     /// The filter equivalent to a list of filter functions applied to content within `bounds`.
     pub fn from_functions(functions: &[FilterFunction], bounds: Rect) -> Self {
         let mut filter = Self::new(bounds);
@@ -116,6 +146,18 @@ pub struct Subregion {
     pub width: Option<f32>,
     /// The `height` attribute.
     pub height: Option<f32>,
+}
+
+impl Subregion {
+    /// The subregion with missing attributes taken from `default`.
+    pub fn resolve(self, default: Rect) -> Rect {
+        Rect::new(
+            self.x.unwrap_or(default.x),
+            self.y.unwrap_or(default.y),
+            self.width.unwrap_or(default.width),
+            self.height.unwrap_or(default.height),
+        )
+    }
 }
 
 /// A rectangle in user space, empty if its width or height is zero or negative.
