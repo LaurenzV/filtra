@@ -12,6 +12,7 @@ mod offset;
 mod pixmap;
 mod rect;
 mod simd;
+mod tile;
 
 pub use color_space::{ColorSpace, convert_color_space};
 pub use composite::{PorterDuff, composite};
@@ -20,3 +21,4 @@ pub use merge::merge;
 pub use offset::offset;
 pub use pixmap::{Pixmap, Source, Target};
 pub use rect::IntRect;
+pub use tile::tile;

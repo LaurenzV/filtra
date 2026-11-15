@@ -155,6 +155,24 @@ impl Target<'_> {
             .zip(self.rect.y0..)
             .map(move |(row, y)| (y, &mut row[..width]))
     }
+
+    pub(crate) fn repeat_rows(&mut self, period: usize) {
+        let rows = if self.rect.is_empty() {
+            0
+        } else {
+            self.rect.height() as usize
+        };
+
+        let stride = self.pixmap.stride();
+        let width = self.rect.width() as usize * 4;
+
+        for row in period..rows {
+            let start = (row - period) * stride;
+            self.pixmap
+                .data
+                .copy_within(start..start + width, row * stride);
+        }
+    }
 }
 
 pub(crate) fn segments(
