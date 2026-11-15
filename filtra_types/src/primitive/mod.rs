@@ -59,6 +59,7 @@ pub enum Primitive {
     Flood(Flood),
     /// `feGaussianBlur`.
     GaussianBlur(GaussianBlur),
+    // TODO: `feImage`.
     /// `feMerge`.
     Merge(Merge),
     /// `feMorphology`.
