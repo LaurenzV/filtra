@@ -7,14 +7,16 @@
 - It is not required to follow the spec's algorithm line-by-line, if other
   algorithms are possible that achieve the same effect up to rounding but are faster/more memory
   efficient.
+- In general, we always prefer approaches with better performance of color-accuracy, though we do need to make sure the deviations are within limits.
 
 ## Code
 - Avoid comments by default. If you do add comments, keep them brief, and only to provide background information (for example explaining what algorithm we use for certain code). Don't narrate code or fixes, inline comments only for code where the reasoning behind it is not possible to derive just by looking at it.
-- Doc comments only on public API: one short line, describing that item only (not what other code
-  does with it).
+- Doc comments only on public API: Ideally one short line, describing that item only (not what other code
+  does with it). The lib.rs documentation can be longer.
 - Order items in a file by importance: public items first, then `pub(crate)`, then private ones,
   and by importance within each group.
 - Testing should go through visreg by default, unit tests only being used in cases where it's not possible.
+- Follow the conventions of surrounding code in terms of when to add whitespaces between lines and when not.
 
 ## Commits
 - For commits that apply to a specific crate, prefix the commit message with `crate: {message}`.
