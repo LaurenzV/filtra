@@ -4,6 +4,7 @@ mod component_transfer;
 mod composite;
 mod convolve_matrix;
 mod diffuse_lighting;
+mod displacement_map;
 mod edge_mode;
 mod light_source;
 
@@ -13,6 +14,7 @@ pub use component_transfer::{ComponentTransfer, TransferFunction};
 pub use composite::{Composite, CompositeOperator};
 pub use convolve_matrix::ConvolveMatrix;
 pub use diffuse_lighting::DiffuseLighting;
+pub use displacement_map::{ColorChannel, DisplacementMap};
 pub use edge_mode::EdgeMode;
 pub use light_source::{DistantLight, LightSource, PointLight, SpotLight};
 
@@ -31,4 +33,6 @@ pub enum Primitive {
     ConvolveMatrix(ConvolveMatrix),
     /// `feDiffuseLighting`.
     DiffuseLighting(DiffuseLighting),
+    /// `feDisplacementMap`.
+    DisplacementMap(DisplacementMap),
 }
