@@ -10,9 +10,13 @@
 - In general, we always prefer approaches with better performance of color-accuracy, though we do need to make sure the deviations are within limits.
 
 ## Code
-- Avoid comments by default. If you do add comments, keep them brief, and only to provide background information (for example explaining what algorithm we use for certain code). Don't narrate code or fixes, inline comments only for code where the reasoning behind it is not possible to derive just by looking at it.
-- Doc comments only on public API: Ideally one short line, describing that item only (not what other code
-  does with it). The lib.rs documentation can be longer.
+- Avoid comments. Prefer a clearer name over a comment.
+- `///` on public API, and on private items only when the name and signature don't already say it.
+  One short line on what the item is; no conditions, edge cases or side notes. The lib.rs
+  documentation can be longer.
+- `//` inside functions only for reasoning that can't be derived from the code itself, such as
+  which algorithm is used and why.
+- Never restate what the code does, and never describe how it changed.
 - Order items in a file by importance: public items first, then `pub(crate)`, then private ones,
   and by importance within each group.
 - Testing should go through visreg by default, unit tests only being used in cases where it's not possible.
