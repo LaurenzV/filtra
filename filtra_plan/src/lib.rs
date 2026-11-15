@@ -106,6 +106,15 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    /// Transforms the unpremultiplied colors of an image with a matrix.
+    ColorMatrix {
+        /// The source.
+        src: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// A 4×5 matrix in row-major order, applied to `[R, G, B, A, 1]`.
+        matrix: [f32; 20],
+    },
 }
 
 impl Pass for Step {
@@ -114,9 +123,10 @@ impl Pass for Step {
             Self::SourceGraphic { .. } | Self::SourceAlpha { .. } | Self::Flood { .. } => {
                 ([None, None], &[])
             }
-            Self::Convert { src, .. } | Self::Offset { src, .. } | Self::Tile { src, .. } => {
-                ([Some(*src), None], &[])
-            }
+            Self::Convert { src, .. }
+            | Self::Offset { src, .. }
+            | Self::Tile { src, .. }
+            | Self::ColorMatrix { src, .. } => ([Some(*src), None], &[]),
             Self::Composite { src, backdrop, .. } => ([Some(*src), Some(*backdrop)], &[]),
             Self::Merge { srcs, .. } => ([None, None], srcs),
         };
@@ -133,7 +143,8 @@ impl Pass for Step {
             | Self::Offset { dst, .. }
             | Self::Tile { dst, .. }
             | Self::Composite { dst, .. }
-            | Self::Merge { dst, .. } => *dst,
+            | Self::Merge { dst, .. }
+            | Self::ColorMatrix { dst, .. } => *dst,
         }
     }
 }

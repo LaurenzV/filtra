@@ -63,6 +63,9 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
             let srcs: Vec<Source<'_>> = srcs.iter().map(|src| read(buffers, image(*src))).collect();
             filtra_kernels::merge(&srcs, target);
         }),
+        Step::ColorMatrix { src, dst, matrix } => write(buffers, image(*dst), |buffers, target| {
+            filtra_kernels::color_matrix(read(buffers, image(*src)), target, matrix);
+        }),
     }
 }
 

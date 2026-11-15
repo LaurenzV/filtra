@@ -1,4 +1,4 @@
-use filtra_types::{ColorInterpolation, Filter, Input, Node, Primitive, Rect};
+use filtra_types::{ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect};
 
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
 
@@ -136,6 +136,11 @@ impl<'a> Planner<'a> {
                 operator: composite.operator,
                 dst,
             },
+            (Primitive::ColorMatrix(color_matrix), &[src]) => Step::ColorMatrix {
+                src,
+                dst,
+                matrix: matrix(color_matrix),
+            },
             // TODO: The remaining primitives.
             _ => Step::Flood { dst, color: [0; 4] },
         };
@@ -216,6 +221,40 @@ impl Transform {
             ((rect.x + rect.width) * sx + tx).ceil() as i32,
             ((rect.y + rect.height) * sy + ty).ceil() as i32,
         )
+    }
+}
+
+fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
+    match *color_matrix {
+        ColorMatrix::Matrix(matrix) => matrix,
+        #[rustfmt::skip]
+        ColorMatrix::Saturate(s) => [
+            0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s, 0.0, 0.0,
+            0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s, 0.0, 0.0,
+            0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s, 0.0, 0.0,
+            0.0, 0.0, 0.0, 1.0, 0.0,
+        ],
+        #[rustfmt::skip]
+        ColorMatrix::HueRotate(degrees) => {
+            let (sin, cos) = degrees.to_radians().sin_cos();
+            let a = |constant: f32, cos_factor: f32, sin_factor: f32| {
+                constant + cos * cos_factor + sin * sin_factor
+            };
+
+            [
+                a(0.213, 0.787, -0.213), a(0.715, -0.715, -0.715), a(0.072, -0.072, 0.928), 0.0, 0.0,
+                a(0.213, -0.213, 0.143), a(0.715, 0.285, 0.140), a(0.072, -0.072, -0.283), 0.0, 0.0,
+                a(0.213, -0.213, -0.787), a(0.715, -0.715, 0.715), a(0.072, 0.928, 0.072), 0.0, 0.0,
+                0.0, 0.0, 0.0, 1.0, 0.0,
+            ]
+        }
+        #[rustfmt::skip]
+        ColorMatrix::LuminanceToAlpha => [
+            0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0,
+            0.2126, 0.7152, 0.0722, 0.0, 0.0,
+        ],
     }
 }
 

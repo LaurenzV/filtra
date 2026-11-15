@@ -2,6 +2,7 @@
 
 #![cfg(test)]
 
+mod color_matrix;
 mod composite;
 mod filter;
 mod flood;
