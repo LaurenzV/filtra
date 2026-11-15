@@ -13,6 +13,7 @@ mod light_source;
 mod merge;
 mod morphology;
 mod offset;
+mod specular_lighting;
 
 pub use blend::{Blend, BlendMode};
 pub use color_matrix::ColorMatrix;
@@ -29,6 +30,7 @@ pub use light_source::{DistantLight, LightSource, PointLight, SpotLight};
 pub use merge::Merge;
 pub use morphology::{Morphology, MorphologyOperator};
 pub use offset::Offset;
+pub use specular_lighting::SpecularLighting;
 
 /// A filter primitive.
 #[derive(Debug, Clone, PartialEq)]
@@ -59,4 +61,6 @@ pub enum Primitive {
     Morphology(Morphology),
     /// `feOffset`.
     Offset(Offset),
+    /// `feSpecularLighting`.
+    SpecularLighting(SpecularLighting),
 }
