@@ -15,6 +15,7 @@ mod morphology;
 mod offset;
 mod specular_lighting;
 mod tile;
+mod turbulence;
 
 pub use blend::{Blend, BlendMode};
 pub use color_matrix::ColorMatrix;
@@ -33,6 +34,7 @@ pub use morphology::{Morphology, MorphologyOperator};
 pub use offset::Offset;
 pub use specular_lighting::SpecularLighting;
 pub use tile::Tile;
+pub use turbulence::{Turbulence, TurbulenceType};
 
 /// A filter primitive.
 #[derive(Debug, Clone, PartialEq)]
@@ -67,4 +69,6 @@ pub enum Primitive {
     SpecularLighting(SpecularLighting),
     /// `feTile`.
     Tile(Tile),
+    /// `feTurbulence`.
+    Turbulence(Turbulence),
 }
