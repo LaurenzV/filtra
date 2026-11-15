@@ -115,3 +115,23 @@ pub(crate) fn pack<S: Simd>(channels: [f32x8<S>; 4], bytes: &mut [u8; 32]) {
         .bitcast::<u8x32<S>>()
         .store_slice(bytes);
 }
+
+#[inline(always)]
+pub(crate) fn unpremultiply<S: Simd>(simd: S, channels: [f32x8<S>; 4]) -> [f32x8<S>; 4] {
+    let [r, g, b, a] = channels;
+    let scale = f32x8::splat(simd, 1.0) / a.max(1.0);
+
+    [r * scale, g * scale, b * scale, a * (1.0 / 255.0)]
+}
+
+#[inline(always)]
+pub(crate) fn premultiply<S: Simd>(channels: [f32x8<S>; 4]) -> [f32x8<S>; 4] {
+    let [r, g, b, a] = channels;
+    let alpha = a.max(0.0).min(1.0) * 255.0;
+    let color = {
+        #[inline(always)]
+        |value: f32x8<S>| value.max(0.0).min(1.0) * alpha
+    };
+
+    [color(r), color(g), color(b), alpha]
+}

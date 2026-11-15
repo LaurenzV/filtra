@@ -6,6 +6,7 @@
 
 mod alpha;
 mod arithmetic;
+mod color_matrix;
 mod color_space;
 mod composite;
 mod flood;
@@ -18,6 +19,7 @@ mod tile;
 
 pub use alpha::alpha;
 pub use arithmetic::arithmetic;
+pub use color_matrix::color_matrix;
 pub use color_space::{ColorSpace, convert};
 pub use composite::{PorterDuff, composite};
 pub use flood::flood;
