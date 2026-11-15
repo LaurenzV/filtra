@@ -11,6 +11,7 @@ mod flood;
 mod gaussian_blur;
 mod light_source;
 mod merge;
+mod morphology;
 
 pub use blend::{Blend, BlendMode};
 pub use color_matrix::ColorMatrix;
@@ -25,6 +26,7 @@ pub use flood::Flood;
 pub use gaussian_blur::GaussianBlur;
 pub use light_source::{DistantLight, LightSource, PointLight, SpotLight};
 pub use merge::Merge;
+pub use morphology::{Morphology, MorphologyOperator};
 
 /// A filter primitive.
 #[derive(Debug, Clone, PartialEq)]
@@ -51,4 +53,6 @@ pub enum Primitive {
     GaussianBlur(GaussianBlur),
     /// `feMerge`.
     Merge(Merge),
+    /// `feMorphology`.
+    Morphology(Morphology),
 }
