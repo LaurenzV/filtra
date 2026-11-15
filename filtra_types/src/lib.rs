@@ -5,5 +5,7 @@
 extern crate alloc;
 
 mod color;
+mod primitive;
 
 pub use color::{Color, ColorInterpolation};
+pub use primitive::*;
