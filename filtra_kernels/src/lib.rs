@@ -5,6 +5,7 @@
 //! target; pixels outside of an input are transparent black.
 
 mod alpha;
+mod arithmetic;
 mod color_space;
 mod composite;
 mod flood;
@@ -16,6 +17,7 @@ mod simd;
 mod tile;
 
 pub use alpha::alpha;
+pub use arithmetic::arithmetic;
 pub use color_space::{ColorSpace, convert};
 pub use composite::{PorterDuff, composite};
 pub use flood::flood;

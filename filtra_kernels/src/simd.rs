@@ -1,4 +1,4 @@
-use fearless_simd::{Simd, prelude::*, u8x32, u16x16, u32x8};
+use fearless_simd::{Simd, SimdCvtFloat, f32x8, i32x8, prelude::*, u8x32, u16x16, u32x8};
 
 // Every byte stays in the 32-bit lane of its pixel, which avoids shuffles on x86.
 #[derive(Clone, Copy)]
@@ -88,4 +88,30 @@ pub(crate) fn for_each_chunk<const N: usize>(
         f(padded.each_ref(), &mut chunk);
         tail.copy_from_slice(&chunk[..tail.len()]);
     }
+}
+
+#[inline(always)]
+pub(crate) fn unpack<S: Simd>(simd: S, bytes: &[u8; 32]) -> [f32x8<S>; 4] {
+    let pixels: u32x8<S> = u8x32::from_slice(simd, bytes).bitcast();
+    let channel = {
+        #[inline(always)]
+        |shift: u32| f32x8::float_from(((pixels >> shift) & 0xff).bitcast::<i32x8<S>>())
+    };
+
+    [channel(0), channel(8), channel(16), channel(24)]
+}
+
+#[inline(always)]
+pub(crate) fn pack<S: Simd>(channels: [f32x8<S>; 4], bytes: &mut [u8; 32]) {
+    let channel = {
+        #[inline(always)]
+        |value: f32x8<S>, shift: u32| {
+            (value + 0.5).to_int::<i32x8<S>>().bitcast::<u32x8<S>>() << shift
+        }
+    };
+    let [r, g, b, a] = channels;
+
+    (channel(r, 0) | channel(g, 8) | channel(b, 16) | channel(a, 24))
+        .bitcast::<u8x32<S>>()
+        .store_slice(bytes);
 }
