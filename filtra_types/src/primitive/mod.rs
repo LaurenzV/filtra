@@ -7,6 +7,7 @@ mod diffuse_lighting;
 mod displacement_map;
 mod drop_shadow;
 mod edge_mode;
+mod flood;
 mod light_source;
 
 pub use blend::{Blend, BlendMode};
@@ -18,6 +19,7 @@ pub use diffuse_lighting::DiffuseLighting;
 pub use displacement_map::{ColorChannel, DisplacementMap};
 pub use drop_shadow::DropShadow;
 pub use edge_mode::EdgeMode;
+pub use flood::Flood;
 pub use light_source::{DistantLight, LightSource, PointLight, SpotLight};
 
 /// A filter primitive.
@@ -39,4 +41,6 @@ pub enum Primitive {
     DisplacementMap(DisplacementMap),
     /// `feDropShadow`.
     DropShadow(DropShadow),
+    /// `feFlood`.
+    Flood(Flood),
 }
