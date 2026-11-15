@@ -1,0 +1,12 @@
+[package]
+name = "filtra"
+description = "Applies SVG and CSS filter effects to pixmaps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+filtra_kernels = { path = "../filtra_kernels" }
+filtra_types = { path = "../filtra_types" }
+filtra_plan = { path = "../filtra_plan" }
