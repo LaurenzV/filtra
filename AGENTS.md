@@ -14,6 +14,7 @@
   does with it).
 - Order items in a file by importance: public items first, then `pub(crate)`, then private ones,
   and by importance within each group.
+- Testing should go through visreg by default, unit tests only being used in cases where it's not possible.
 
 ## Commits
 - For commits that apply to a specific crate, prefix the commit message with `crate: {message}`.
