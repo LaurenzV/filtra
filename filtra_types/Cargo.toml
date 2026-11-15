@@ -1,0 +1,9 @@
+[package]
+name = "filtra_types"
+description = "Types describing SVG and CSS filter effects."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
