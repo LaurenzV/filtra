@@ -10,6 +10,7 @@ mod edge_mode;
 mod flood;
 mod gaussian_blur;
 mod light_source;
+mod merge;
 
 pub use blend::{Blend, BlendMode};
 pub use color_matrix::ColorMatrix;
@@ -23,6 +24,7 @@ pub use edge_mode::EdgeMode;
 pub use flood::Flood;
 pub use gaussian_blur::GaussianBlur;
 pub use light_source::{DistantLight, LightSource, PointLight, SpotLight};
+pub use merge::Merge;
 
 /// A filter primitive.
 #[derive(Debug, Clone, PartialEq)]
@@ -47,4 +49,6 @@ pub enum Primitive {
     Flood(Flood),
     /// `feGaussianBlur`.
     GaussianBlur(GaussianBlur),
+    /// `feMerge`.
+    Merge(Merge),
 }
