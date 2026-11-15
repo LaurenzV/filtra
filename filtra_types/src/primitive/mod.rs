@@ -8,6 +8,7 @@ mod displacement_map;
 mod drop_shadow;
 mod edge_mode;
 mod flood;
+mod gaussian_blur;
 mod light_source;
 
 pub use blend::{Blend, BlendMode};
@@ -20,6 +21,7 @@ pub use displacement_map::{ColorChannel, DisplacementMap};
 pub use drop_shadow::DropShadow;
 pub use edge_mode::EdgeMode;
 pub use flood::Flood;
+pub use gaussian_blur::GaussianBlur;
 pub use light_source::{DistantLight, LightSource, PointLight, SpotLight};
 
 /// A filter primitive.
@@ -43,4 +45,6 @@ pub enum Primitive {
     DropShadow(DropShadow),
     /// `feFlood`.
     Flood(Flood),
+    /// `feGaussianBlur`.
+    GaussianBlur(GaussianBlur),
 }
