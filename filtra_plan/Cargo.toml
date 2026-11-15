@@ -1,0 +1,10 @@
+[package]
+name = "filtra_plan"
+description = "Plans the evaluation of SVG and CSS filter effects."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+filtra_types = { path = "../filtra_types" }

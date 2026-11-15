@@ -16,5 +16,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "filtra_plan"
+version = "0.1.0"
+dependencies = [
+ "filtra_types",
+]
+
+[[package]]
 name = "filtra_types"
 version = "0.1.0"
