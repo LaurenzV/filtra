@@ -16,7 +16,7 @@ mod simd;
 mod tile;
 
 pub use alpha::alpha;
-pub use color_space::{ColorSpace, convert_color_space};
+pub use color_space::{ColorSpace, convert};
 pub use composite::{PorterDuff, composite};
 pub use flood::flood;
 pub use merge::merge;

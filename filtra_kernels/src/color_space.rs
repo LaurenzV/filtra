@@ -1,6 +1,7 @@
 use std::sync::OnceLock;
 
-use crate::Target;
+use crate::pixmap::segments;
+use crate::{Source, Target};
 
 /// The color space of a pixmap's color values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -11,20 +12,32 @@ pub enum ColorSpace {
     LinearRgb,
 }
 
-/// Converts the colors of the target from one color space to another.
-pub fn convert_color_space(mut dst: Target<'_>, from: ColorSpace, to: ColorSpace) {
-    if from == to {
-        return;
-    }
+/// Converts the colors of `src` from one color space to another.
+pub fn convert(src: Source<'_>, mut dst: Target<'_>, from: ColorSpace, to: ColorSpace) {
+    let rect = dst.rect();
+    let table = (from != to).then(|| table(to == ColorSpace::LinearRgb));
 
-    let table = table(to == ColorSpace::LinearRgb);
+    for (y, row) in dst.rows_mut() {
+        for (x0, x1) in segments(rect.x0, rect.x1, [src.rect()].into_iter()) {
+            let output = &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4];
 
-    for (_, row) in dst.rows_mut() {
-        for pixel in row.as_chunks_mut::<4>().0 {
-            let results = &table[usize::from(pixel[3])];
-            pixel[0] = results[usize::from(pixel[0])];
-            pixel[1] = results[usize::from(pixel[1])];
-            pixel[2] = results[usize::from(pixel[2])];
+            match (src.row(y, x0, x1), table) {
+                (None, _) => output.fill(0),
+                (Some(source), None) => output.copy_from_slice(source),
+                (Some(source), Some(table)) => {
+                    let output = output.as_chunks_mut::<4>().0;
+
+                    for (output, source) in output.iter_mut().zip(source.as_chunks::<4>().0) {
+                        let results = &table[usize::from(source[3])];
+                        *output = [
+                            results[usize::from(source[0])],
+                            results[usize::from(source[1])],
+                            results[usize::from(source[2])],
+                            source[3],
+                        ];
+                    }
+                }
+            }
         }
     }
 }
