@@ -3,6 +3,11 @@
 use crate::check;
 
 #[test]
+fn composite_arithmetic() {
+    check("linear_rgb/composite_arithmetic");
+}
+
+#[test]
 fn merge() {
     check("linear_rgb/merge");
 }

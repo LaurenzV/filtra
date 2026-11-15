@@ -57,12 +57,7 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
         } => write(buffers, image(*dst), |buffers, target| {
             let src = read(buffers, image(*src));
             let backdrop = read(buffers, image(*backdrop));
-
-            match porter_duff(*operator) {
-                Some(operator) => filtra_kernels::composite(src, backdrop, operator, target),
-                // TODO: `arithmetic`.
-                None => filtra_kernels::flood(target, [0; 4]),
-            }
+            composite(src, backdrop, *operator, target);
         }),
         Step::Merge { srcs, dst } => write(buffers, image(*dst), |buffers, target| {
             let srcs: Vec<Source<'_>> = srcs.iter().map(|src| read(buffers, image(*src))).collect();
@@ -92,14 +87,18 @@ fn color_space(space: filtra_plan::ColorSpace) -> ColorSpace {
     }
 }
 
-fn porter_duff(operator: CompositeOperator) -> Option<PorterDuff> {
-    match operator {
-        CompositeOperator::Over => Some(PorterDuff::Over),
-        CompositeOperator::In => Some(PorterDuff::In),
-        CompositeOperator::Out => Some(PorterDuff::Out),
-        CompositeOperator::Atop => Some(PorterDuff::Atop),
-        CompositeOperator::Xor => Some(PorterDuff::Xor),
-        CompositeOperator::Lighter => Some(PorterDuff::Lighter),
-        CompositeOperator::Arithmetic { .. } => None,
-    }
+fn composite(src: Source<'_>, backdrop: Source<'_>, operator: CompositeOperator, dst: Target<'_>) {
+    let operator = match operator {
+        CompositeOperator::Over => PorterDuff::Over,
+        CompositeOperator::In => PorterDuff::In,
+        CompositeOperator::Out => PorterDuff::Out,
+        CompositeOperator::Atop => PorterDuff::Atop,
+        CompositeOperator::Xor => PorterDuff::Xor,
+        CompositeOperator::Lighter => PorterDuff::Lighter,
+        CompositeOperator::Arithmetic { k1, k2, k3, k4 } => {
+            return filtra_kernels::arithmetic(src, backdrop, [k1, k2, k3, k4], dst);
+        }
+    };
+
+    filtra_kernels::composite(src, backdrop, operator, dst);
 }
