@@ -23,6 +23,27 @@ impl Color {
     pub const fn new(r: f32, g: f32, b: f32, a: f32) -> Self {
         Self { r, g, b, a }
     }
+
+    /// The color with its alpha multiplied by `opacity`.
+    pub fn with_opacity(self, opacity: f32) -> Self {
+        Self {
+            a: self.a.clamp(0.0, 1.0) * opacity.clamp(0.0, 1.0),
+            ..self
+        }
+    }
+
+    /// The color as premultiplied RGBA8.
+    pub fn to_premultiplied_rgba8(self) -> [u8; 4] {
+        let alpha = self.a.clamp(0.0, 1.0);
+        let to_u8 = |value: f32| (value * 255.0 + 0.5) as u8;
+
+        [
+            to_u8(self.r.clamp(0.0, 1.0) * alpha),
+            to_u8(self.g.clamp(0.0, 1.0) * alpha),
+            to_u8(self.b.clamp(0.0, 1.0) * alpha),
+            to_u8(alpha),
+        ]
+    }
 }
 
 /// The color space a filter primitive operates in (`color-interpolation-filters`).
