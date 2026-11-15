@@ -1,0 +1,8 @@
+[package]
+name = "filtra_kernels"
+description = "Filter effect kernels on premultiplied RGBA8 pixmaps."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
