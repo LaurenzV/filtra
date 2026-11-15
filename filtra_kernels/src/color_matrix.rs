@@ -33,7 +33,7 @@ fn color_matrix_inner<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, ma
             for_each_chunk([src.row(y, x0, x1)], output, {
                 #[inline(always)]
                 |[source]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
-                    let color = unpremultiply(simd, unpack(simd, source));
+                    let color = unpremultiply(unpack(simd, source));
                     let transformed = [
                         transform(0, color),
                         transform(1, color),

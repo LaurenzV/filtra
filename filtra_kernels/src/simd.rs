@@ -117,9 +117,9 @@ pub(crate) fn pack<S: Simd>(channels: [f32x8<S>; 4], bytes: &mut [u8; 32]) {
 }
 
 #[inline(always)]
-pub(crate) fn unpremultiply<S: Simd>(simd: S, channels: [f32x8<S>; 4]) -> [f32x8<S>; 4] {
+pub(crate) fn unpremultiply<S: Simd>(channels: [f32x8<S>; 4]) -> [f32x8<S>; 4] {
     let [r, g, b, a] = channels;
-    let scale = f32x8::splat(simd, 1.0) / a.max(1.0);
+    let scale = 1.0 / a.max(1.0);
 
     [r * scale, g * scale, b * scale, a * (1.0 / 255.0)]
 }
