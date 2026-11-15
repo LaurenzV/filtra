@@ -4,11 +4,13 @@
 //! [`Pixmap::source`] and the output with [`Pixmap::target`]. A kernel writes every pixel of its
 //! target; pixels outside of an input are transparent black.
 
+mod color_space;
 mod flood;
 mod offset;
 mod pixmap;
 mod rect;
 
+pub use color_space::{ColorSpace, convert_color_space};
 pub use flood::flood;
 pub use offset::offset;
 pub use pixmap::{Pixmap, Source, Target};
