@@ -1,0 +1,13 @@
+[package]
+name = "filtra_tests"
+description = "Visual tests for filtra."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+filtra = { path = "../filtra" }
+roxmltree = "0.21.1"
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "png", "u8_pipeline"] }

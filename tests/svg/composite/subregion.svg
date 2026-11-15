@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <title>The default subregion is the union of both inputs, made visible by tiling it</title>
+  <filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="100" color-interpolation-filters="sRGB">
+    <feFlood flood-color="#e8833a" x="20" y="20" width="40" height="40" result="a"/>
+    <feFlood flood-color="#2a9d8f" flood-opacity="0.6" x="40" y="40" width="40" height="40" result="b"/>
+    <feComposite in="a" in2="b" operator="xor"/>
+    <feTile/>
+  </filter>
+  <g filter="url(#f)">
+    <rect x="0" y="0" width="100" height="100" fill="#7b5ea7"/>
+  </g>
+</svg>

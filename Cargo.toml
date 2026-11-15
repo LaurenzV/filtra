@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["filtra", "filtra_kernels", "filtra_plan", "filtra_types"]
+members = ["filtra", "filtra_kernels", "filtra_plan", "filtra_types", "tests"]
 
 [workspace.package]
 version = "0.1.0"

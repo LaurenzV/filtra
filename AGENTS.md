@@ -16,6 +16,7 @@
 - Order items in a file by importance: public items first, then `pub(crate)`, then private ones,
   and by importance within each group.
 - Testing should go through visreg by default, unit tests only being used in cases where it's not possible.
+- Optimize new or replaced reference images with `oxipng -o max --strip safe`.
 - Follow the conventions of surrounding code in terms of when to add whitespaces between lines and when not.
 
 ## Commits

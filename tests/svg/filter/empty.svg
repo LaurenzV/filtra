@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <title>A filter without primitives makes the element transparent</title>
+  <filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="100"/>
+  <g filter="url(#f)">
+    <rect x="10" y="10" width="35" height="35" fill="#e8833a"/>
+    <rect x="55" y="55" width="35" height="35" fill="#2a9d8f" fill-opacity="0.6"/>
+  </g>
+</svg>
