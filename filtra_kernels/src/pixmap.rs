@@ -157,6 +157,33 @@ impl Target<'_> {
     }
 }
 
+pub(crate) fn segments(
+    x0: i32,
+    x1: i32,
+    rects: impl Iterator<Item = IntRect> + Clone,
+) -> impl Iterator<Item = (i32, i32)> {
+    let mut x = x0;
+
+    core::iter::from_fn(move || {
+        if x >= x1 {
+            return None;
+        }
+
+        let end = rects
+            .clone()
+            .filter(|rect| !rect.is_empty())
+            .flat_map(|rect| [rect.x0, rect.x1])
+            .filter(|&edge| edge > x)
+            .min()
+            .map_or(x1, |edge| edge.min(x1));
+
+        let segment = (x, end);
+        x = end;
+
+        Some(segment)
+    })
+}
+
 fn extent(x: i32, y: i32, width: u32, height: u32) -> IntRect {
     let end =
         |start: i32, len: u32| (i64::from(start) + i64::from(len)).min(i64::from(i32::MAX)) as i32;

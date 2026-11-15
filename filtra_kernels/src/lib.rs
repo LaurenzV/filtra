@@ -5,12 +5,15 @@
 //! target; pixels outside of an input are transparent black.
 
 mod color_space;
+mod composite;
 mod flood;
 mod offset;
 mod pixmap;
 mod rect;
+mod simd;
 
 pub use color_space::{ColorSpace, convert_color_space};
+pub use composite::{PorterDuff, composite};
 pub use flood::flood;
 pub use offset::offset;
 pub use pixmap::{Pixmap, Source, Target};
