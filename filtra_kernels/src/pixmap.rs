@@ -74,6 +74,14 @@ impl Pixmap {
         self.data
     }
 
+    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel input.
+    pub fn source(&self, x: i32, y: i32) -> Source<'_> {
+        Source {
+            rect: extent(x, y, self.width, self.height),
+            pixmap: self,
+        }
+    }
+
     /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel output.
     pub fn target(&mut self, x: i32, y: i32) -> Target<'_> {
         Target {
@@ -84,6 +92,36 @@ impl Pixmap {
 
     fn stride(&self) -> usize {
         (self.width as usize * 4).max(1)
+    }
+}
+
+/// A placed pixmap that a kernel reads. Pixels outside of it are transparent black.
+#[derive(Debug, Clone, Copy)]
+pub struct Source<'a> {
+    pixmap: &'a Pixmap,
+    rect: IntRect,
+}
+
+impl<'a> Source<'a> {
+    /// The pixels the pixmap covers.
+    pub fn rect(&self) -> IntRect {
+        self.rect
+    }
+
+    pub(crate) fn row(&self, y: i32, x0: i32, x1: i32) -> Option<&'a [u8]> {
+        let covered = (self.rect.y0..self.rect.y1).contains(&y)
+            && x0 >= self.rect.x0
+            && x1 <= self.rect.x1
+            && x0 < x1;
+
+        if !covered {
+            return None;
+        }
+
+        let start = (y - self.rect.y0) as usize * self.pixmap.stride();
+        let columns = (x0 - self.rect.x0) as usize * 4..(x1 - self.rect.x0) as usize * 4;
+
+        Some(&self.pixmap.data[start..][columns])
     }
 }
 
