@@ -1,5 +1,6 @@
 use filtra_types::{
     ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect, TransferFunction,
+    TurbulenceType,
 };
 
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
@@ -164,6 +165,22 @@ impl<'a> Planner<'a> {
                 operator: morphology.operator,
                 rx: (morphology.radius_x * self.transform.sx).round() as u32,
                 ry: (morphology.radius_y * self.transform.sy).round() as u32,
+            },
+            // Negative values are unsupported (§9.21), and an unsupported value invalidates the
+            // whole attribute ("Partial implementations"), which then takes its initial value.
+            (Primitive::Turbulence(turbulence), []) => Step::Turbulence {
+                dst,
+                base_frequency: match [turbulence.base_frequency_x, turbulence.base_frequency_y] {
+                    [x, y] if x >= 0.0 && y >= 0.0 => {
+                        [x / self.transform.sx, y / self.transform.sy]
+                    }
+                    _ => [0.0; 2],
+                },
+                octaves: u32::try_from(turbulence.num_octaves).unwrap_or(1),
+                seed: turbulence.seed as i64,
+                stitch_tile: turbulence.stitch_tiles.then_some(subregion),
+                fractal_noise: turbulence.kind == TurbulenceType::FractalNoise,
+                origin: [self.transform.tx, self.transform.ty],
             },
             (Primitive::ColorMatrix(color_matrix), &[src]) => Step::ColorMatrix {
                 src,

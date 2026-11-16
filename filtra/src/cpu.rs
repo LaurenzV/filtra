@@ -89,6 +89,26 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
             };
             filtra_kernels::morphology(read(buffers, image(*src)), target, operator, *rx, *ry);
         }),
+        Step::Turbulence {
+            dst,
+            base_frequency,
+            octaves,
+            seed,
+            stitch_tile,
+            fractal_noise,
+            origin,
+        } => write(buffers, image(*dst), |_, target| {
+            let turbulence = filtra_kernels::Turbulence {
+                base_frequency: *base_frequency,
+                octaves: *octaves,
+                seed: *seed,
+                stitch_tile: stitch_tile
+                    .map(|rect| IntRect::new(rect.x0, rect.y0, rect.x1, rect.y1)),
+                fractal_noise: *fractal_noise,
+                origin: *origin,
+            };
+            filtra_kernels::turbulence(target, &turbulence);
+        }),
         Step::ColorMatrix { src, dst, matrix } => write(buffers, image(*dst), |buffers, target| {
             filtra_kernels::color_matrix(read(buffers, image(*src)), target, matrix);
         }),

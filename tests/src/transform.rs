@@ -21,3 +21,8 @@ fn subregion() {
 fn tile() {
     check_at("transform/tile", 2);
 }
+
+#[test]
+fn turbulence() {
+    check_at("transform/turbulence", 2);
+}

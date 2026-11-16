@@ -133,6 +133,23 @@ pub enum Step {
         /// The vertical radius in pixels.
         ry: u32,
     },
+    /// Fills with Perlin turbulence.
+    Turbulence {
+        /// The destination.
+        dst: ImageId,
+        /// The base frequencies along the x- and y-axis, in cycles per pixel.
+        base_frequency: [f32; 2],
+        /// The number of octaves.
+        octaves: u32,
+        /// The seed of the random numbers.
+        seed: i64,
+        /// The pixels of the subregion, if the noise is stitched to it.
+        stitch_tile: Option<IntRect>,
+        /// Whether to sum the octaves (`fractalNoise`) instead of their absolute values.
+        fractal_noise: bool,
+        /// The position of the noise's origin in pixels.
+        origin: [f32; 2],
+    },
     /// Transforms the unpremultiplied colors of an image with a matrix.
     ColorMatrix {
         /// The source.
@@ -157,9 +174,10 @@ pub enum Step {
 impl Pass for Step {
     fn reads(&self) -> impl Iterator<Item = ImageId> {
         let (fixed, rest): ([Option<ImageId>; 2], &[ImageId]) = match self {
-            Self::SourceGraphic { .. } | Self::SourceAlpha { .. } | Self::Flood { .. } => {
-                ([None, None], &[])
-            }
+            Self::SourceGraphic { .. }
+            | Self::SourceAlpha { .. }
+            | Self::Flood { .. }
+            | Self::Turbulence { .. } => ([None, None], &[]),
             Self::Convert { src, .. }
             | Self::Offset { src, .. }
             | Self::Tile { src, .. }
@@ -187,6 +205,7 @@ impl Pass for Step {
             | Self::Blend { dst, .. }
             | Self::Merge { dst, .. }
             | Self::Morphology { dst, .. }
+            | Self::Turbulence { dst, .. }
             | Self::ColorMatrix { dst, .. }
             | Self::ComponentTransfer { dst, .. } => *dst,
         }

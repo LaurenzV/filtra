@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+  <title>A huge stitched base frequency neither overflows nor goes transparent</title>
+  <filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="100">
+    <feTurbulence type="fractalNoise" baseFrequency="1e10" numOctaves="24" stitchTiles="stitch"/>
+  </filter>
+  <g filter="url(#f)">
+    <rect x="20" y="20" width="60" height="60" fill="#e8833a"/>
+  </g>
+</svg>

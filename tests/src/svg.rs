@@ -4,7 +4,7 @@
 use filtra::types::{
     Blend, BlendMode, Color, ColorInterpolation, ColorMatrix, ComponentTransfer, Composite,
     CompositeOperator, Filter, FilterFunction, Flood, Input, Merge, Morphology, MorphologyOperator,
-    Node, Offset, Primitive, Rect, Subregion, Tile, TransferFunction,
+    Node, Offset, Primitive, Rect, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -121,6 +121,7 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                 (Primitive::Offset(offset), vec![input("in")])
             }
             "feTile" => (Primitive::Tile(Tile), vec![input("in")]),
+            "feTurbulence" => (Primitive::Turbulence(turbulence(child)), vec![]),
             other => panic!("unsupported filter primitive <{other}>"),
         };
 
@@ -230,6 +231,34 @@ fn morphology(node: XmlNode<'_, '_>) -> Morphology {
         operator,
         radius_x,
         radius_y,
+    }
+}
+
+fn turbulence(node: XmlNode<'_, '_>) -> Turbulence {
+    let frequency = node
+        .attribute("baseFrequency")
+        .map(numbers)
+        .unwrap_or_default();
+    let (base_frequency_x, base_frequency_y) = match *frequency.as_slice() {
+        [f] => (f, f),
+        [x, y] => (x, y),
+        _ => (0.0, 0.0),
+    };
+    let kind = match node.attribute("type").unwrap_or("turbulence") {
+        "turbulence" => TurbulenceType::Turbulence,
+        "fractalNoise" => TurbulenceType::FractalNoise,
+        other => panic!("unsupported feTurbulence type \"{other}\""),
+    };
+
+    Turbulence {
+        base_frequency_x,
+        base_frequency_y,
+        num_octaves: node.attribute("numOctaves").map_or(1, |value| {
+            value.trim().parse().expect("numOctaves is not an integer")
+        }),
+        seed: number_or(node, "seed", 0.0),
+        stitch_tiles: node.attribute("stitchTiles") == Some("stitch"),
+        kind,
     }
 }
 

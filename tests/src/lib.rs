@@ -17,6 +17,7 @@ mod region;
 mod svg;
 mod tile;
 mod transform;
+mod turbulence;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
