@@ -1,6 +1,6 @@
 use filtra_types::{
-    ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect, TransferFunction,
-    TurbulenceType,
+    ColorInterpolation, ColorMatrix, Filter, GaussianBlur, Input, Node, Primitive, Rect,
+    TransferFunction, TurbulenceType,
 };
 
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
@@ -215,6 +215,11 @@ impl<'a> Planner<'a> {
                     regions(&transfer.alpha),
                 ],
             },
+            (Primitive::GaussianBlur(blur), &[src]) => Step::GaussianBlur {
+                src,
+                dst,
+                std_dev: std_dev(blur, self.transform),
+            },
             // TODO: The remaining primitives.
             _ => Step::Flood { dst, color: [0; 4] },
         };
@@ -330,6 +335,15 @@ fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
             0.2126, 0.7152, 0.0722, 0.0, 0.0,
         ],
     }
+}
+
+// TODO: `edgeMode` other than `none`.
+fn std_dev(blur: &GaussianBlur, transform: Transform) -> [f32; 2] {
+    // A negative value disables the blur like zero does (§9.14), which browsers apply per axis.
+    [
+        blur.std_dev_x.max(0.0) * transform.sx,
+        blur.std_dev_y.max(0.0) * transform.sy,
+    ]
 }
 
 fn regions(function: &TransferFunction) -> Vec<[f32; 2]> {

@@ -3,6 +3,11 @@
 use crate::check_at;
 
 #[test]
+fn blur() {
+    check_at("transform/blur", 2);
+}
+
+#[test]
 fn displacement_map() {
     check_at("transform/displacement_map", 2);
 }

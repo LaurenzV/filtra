@@ -10,6 +10,7 @@ mod displacement_map;
 mod filter;
 mod flood;
 mod functions;
+mod gaussian_blur;
 mod linear_rgb;
 mod merge;
 mod morphology;

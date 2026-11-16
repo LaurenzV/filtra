@@ -137,6 +137,11 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
             let functions = functions.each_ref().map(Vec::as_slice);
             filtra_kernels::component_transfer(read(buffers, image(*src)), target, functions);
         }),
+        Step::GaussianBlur { src, dst, std_dev } => {
+            write(buffers, image(*dst), |buffers, target| {
+                filtra_kernels::gaussian_blur(read(buffers, image(*src)), target, *std_dev);
+            })
+        }
     }
 }
 

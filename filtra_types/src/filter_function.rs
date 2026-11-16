@@ -43,6 +43,7 @@ impl FilterFunction {
     /// The equivalent filter primitive.
     pub fn to_primitive(&self) -> Primitive {
         match *self {
+            // TODO: `EdgeMode::Duplicate` (§13.1) once the planner supports edge modes.
             Self::Blur(std_dev) => Primitive::GaussianBlur(GaussianBlur {
                 std_dev_x: std_dev,
                 std_dev_y: std_dev,

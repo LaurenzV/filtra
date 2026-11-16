@@ -3,6 +3,21 @@
 use crate::check;
 
 #[test]
+fn blur() {
+    check("functions/blur");
+}
+
+#[test]
+fn blur_default() {
+    check("functions/blur_default");
+}
+
+#[test]
+fn blur_then_brightness() {
+    check("functions/blur_then_brightness");
+}
+
+#[test]
 fn brightness() {
     check("functions/brightness");
 }

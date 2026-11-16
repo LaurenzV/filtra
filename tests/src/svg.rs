@@ -3,9 +3,9 @@
 
 use filtra::types::{
     Blend, BlendMode, Color, ColorChannel, ColorInterpolation, ColorMatrix, ComponentTransfer,
-    Composite, CompositeOperator, DisplacementMap, Filter, FilterFunction, Flood, Input, Merge,
-    Morphology, MorphologyOperator, Node, Offset, Primitive, Rect, Subregion, Tile,
-    TransferFunction, Turbulence, TurbulenceType,
+    Composite, CompositeOperator, DisplacementMap, EdgeMode, Filter, FilterFunction, Flood,
+    GaussianBlur, Input, Merge, Morphology, MorphologyOperator, Node, Offset, Primitive, Rect,
+    Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -105,6 +105,10 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                 };
                 (Primitive::Flood(flood), vec![])
             }
+            "feGaussianBlur" => (
+                Primitive::GaussianBlur(gaussian_blur(child)),
+                vec![input("in")],
+            ),
             "feMerge" => {
                 let nodes = child.children().filter(XmlNode::is_element);
                 let inputs = nodes.map(|node| resolve_input(node, "in", &results));
@@ -321,6 +325,28 @@ fn component_transfer(node: XmlNode<'_, '_>) -> ComponentTransfer {
     transfer
 }
 
+fn gaussian_blur(node: XmlNode<'_, '_>) -> GaussianBlur {
+    // Anything but one or two numbers is an error, which leaves the initial value of 0 (§9.14).
+    let (std_dev_x, std_dev_y) = match node.attribute("stdDeviation").map(numbers).as_deref() {
+        Some(&[both]) => (both, both),
+        Some(&[x, y]) => (x, y),
+        _ => (0.0, 0.0),
+    };
+    let edge_mode = match node.attribute("edgeMode").unwrap_or("none") {
+        "duplicate" => EdgeMode::Duplicate,
+        "wrap" => EdgeMode::Wrap,
+        "mirror" => EdgeMode::Mirror,
+        "none" => EdgeMode::None,
+        other => panic!("invalid edgeMode \"{other}\""),
+    };
+
+    GaussianBlur {
+        std_dev_x,
+        std_dev_y,
+        edge_mode,
+    }
+}
+
 fn composite_operator(node: XmlNode<'_, '_>) -> CompositeOperator {
     match node.attribute("operator").unwrap_or("over") {
         "over" => CompositeOperator::Over,
@@ -349,6 +375,7 @@ fn filter_functions(value: &str, shapes: &[Shape]) -> Filter {
             let argument = argument.trim();
 
             match name.trim() {
+                "blur" => FilterFunction::Blur(length(argument)),
                 "brightness" => FilterFunction::Brightness(amount(argument)),
                 "contrast" => FilterFunction::Contrast(amount(argument)),
                 "grayscale" => FilterFunction::Grayscale(amount(argument)),
@@ -382,6 +409,13 @@ fn amount(argument: &str) -> f32 {
         _ if argument.is_empty() => 1.0,
         Some(percentage) => parse_number(percentage) / 100.0,
         None => parse_number(argument),
+    }
+}
+
+fn length(argument: &str) -> f32 {
+    match argument {
+        "" => 0.0,
+        _ => parse_number(argument.trim_end_matches("px")),
     }
 }
 

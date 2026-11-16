@@ -182,6 +182,15 @@ pub enum Step {
         /// equal regions of `[0, 1]`.
         functions: [Vec<[f32; 2]>; 4],
     },
+    /// Blurs an image with a Gaussian, treating it as transparent beyond its edges.
+    GaussianBlur {
+        /// The source.
+        src: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// The standard deviations along x and y in pixels; an axis with zero isn't blurred.
+        std_dev: [f32; 2],
+    },
 }
 
 impl Pass for Step {
@@ -196,7 +205,8 @@ impl Pass for Step {
             | Self::Tile { src, .. }
             | Self::Morphology { src, .. }
             | Self::ColorMatrix { src, .. }
-            | Self::ComponentTransfer { src, .. } => ([Some(*src), None], &[]),
+            | Self::ComponentTransfer { src, .. }
+            | Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
             Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
                 ([Some(*src), Some(*backdrop)], &[])
             }
@@ -222,7 +232,8 @@ impl Pass for Step {
             | Self::DisplacementMap { dst, .. }
             | Self::Turbulence { dst, .. }
             | Self::ColorMatrix { dst, .. }
-            | Self::ComponentTransfer { dst, .. } => *dst,
+            | Self::ComponentTransfer { dst, .. }
+            | Self::GaussianBlur { dst, .. } => *dst,
         }
     }
 }
