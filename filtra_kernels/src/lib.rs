@@ -19,6 +19,7 @@ mod pixmap;
 mod rect;
 mod simd;
 mod tile;
+mod turbulence;
 
 pub use alpha::alpha;
 pub use arithmetic::arithmetic;
@@ -34,6 +35,7 @@ pub use offset::offset;
 pub use pixmap::{Pixmap, Source, Target};
 pub use rect::IntRect;
 pub use tile::tile;
+pub use turbulence::{Turbulence, turbulence};
 
 // TODO: In-place variants of kernels that compute each pixel from the same pixel of their input,
 // for steps that may overwrite it.
