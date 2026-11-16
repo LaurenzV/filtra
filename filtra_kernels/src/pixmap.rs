@@ -175,6 +175,7 @@ impl Target<'_> {
     }
 }
 
+#[inline(always)]
 pub(crate) fn segments(
     x0: i32,
     x1: i32,
@@ -182,24 +183,34 @@ pub(crate) fn segments(
 ) -> impl Iterator<Item = (i32, i32)> {
     let mut x = x0;
 
-    core::iter::from_fn(move || {
-        if x >= x1 {
-            return None;
-        }
+    // Plain loops, so that this inlines fully into the SIMD code that iterates the segments.
+    core::iter::from_fn(
+        #[inline(always)]
+        move || {
+            if x >= x1 {
+                return None;
+            }
 
-        let end = rects
-            .clone()
-            .filter(|rect| !rect.is_empty())
-            .flat_map(|rect| [rect.x0, rect.x1])
-            .filter(|&edge| edge > x)
-            .min()
-            .map_or(x1, |edge| edge.min(x1));
+            let mut end = x1;
 
-        let segment = (x, end);
-        x = end;
+            for rect in rects.clone() {
+                if rect.is_empty() {
+                    continue;
+                }
 
-        Some(segment)
-    })
+                for edge in [rect.x0, rect.x1] {
+                    if edge > x && edge < end {
+                        end = edge;
+                    }
+                }
+            }
+
+            let segment = (x, end);
+            x = end;
+
+            Some(segment)
+        },
+    )
 }
 
 fn extent(x: i32, y: i32, width: u32, height: u32) -> IntRect {

@@ -55,7 +55,10 @@ pub fn blend(
     // debug builds small.
     macro_rules! blend_with {
         ($mode:ident) => {
-            dispatch!(level, simd => blend_rows(simd, src, backdrop, composite, dst, $mode))
+            dispatch!(level, simd => blend_rows(simd, src, backdrop, composite, dst, {
+                #[inline(always)]
+                |simd, inputs, composite, output| $mode(simd, inputs, composite, output)
+            }))
         };
     }
 

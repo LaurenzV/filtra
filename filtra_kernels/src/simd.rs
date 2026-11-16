@@ -79,7 +79,9 @@ pub(crate) fn for_each_chunk<const N: usize>(
         f(chunks, full.get_mut(i).unwrap_or(&mut padded_output));
     }
 
-    tail.copy_from_slice(&padded_output[..tail.len()]);
+    if !tail.is_empty() {
+        tail.copy_from_slice(&padded_output[..tail.len()]);
+    }
 }
 
 #[inline(always)]
