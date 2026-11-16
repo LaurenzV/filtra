@@ -58,36 +58,28 @@ pub(crate) fn for_each_chunk<const N: usize>(
     output: &mut [u8],
     mut f: impl FnMut([&[u8; 32]; N], &mut [u8; 32]),
 ) {
-    const TRANSPARENT: [u8; 32] = [0; 32];
-
-    let len = output.len() / 32 * 32;
-    let (full, tail) = output.split_at_mut(len);
-
-    for (i, output) in full.as_chunks_mut::<32>().0.iter_mut().enumerate() {
-        let chunks = inputs.map(|input| match input {
-            Some(input) => input[i * 32..][..32].try_into().unwrap(),
-            None => &TRANSPARENT,
-        });
-
-        f(chunks, output);
-    }
+    let (full, tail) = output.as_chunks_mut::<32>();
+    // A missing input has no chunks, so its padded chunk stays transparent.
+    let inputs = core::array::from_fn::<_, N, _>(|k| {
+        inputs[k].map_or((&[][..], &[][..]), |input| input.as_chunks::<32>())
+    });
+    let mut padded_inputs = [[0; 32]; N];
+    let mut padded_output = [0; 32];
 
     if !tail.is_empty() {
-        let padded = inputs.map(|input| {
-            let mut chunk = [0; 32];
+        for (padded, (_, rest)) in padded_inputs.iter_mut().zip(&inputs) {
+            padded[..rest.len()].copy_from_slice(rest);
+        }
 
-            if let Some(input) = input {
-                chunk[..tail.len()].copy_from_slice(&input[len..]);
-            }
-
-            chunk
-        });
-
-        let mut chunk = [0; 32];
-        chunk[..tail.len()].copy_from_slice(tail);
-        f(padded.each_ref(), &mut chunk);
-        tail.copy_from_slice(&chunk[..tail.len()]);
+        padded_output[..tail.len()].copy_from_slice(tail);
     }
+
+    for i in 0..full.len() + usize::from(!tail.is_empty()) {
+        let chunks = core::array::from_fn(|k| inputs[k].0.get(i).unwrap_or(&padded_inputs[k]));
+        f(chunks, full.get_mut(i).unwrap_or(&mut padded_output));
+    }
+
+    tail.copy_from_slice(&padded_output[..tail.len()]);
 }
 
 #[inline(always)]
