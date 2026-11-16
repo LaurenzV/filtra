@@ -10,11 +10,21 @@ pub(crate) struct Wide<S: Simd> {
 impl<S: Simd> Wide<S> {
     #[inline(always)]
     pub(crate) fn load(simd: S, bytes: &[u8; 32]) -> Self {
-        let pixels: u16x16<S> = u8x32::from_slice(simd, bytes).bitcast();
+        Self::from_pixels(u8x32::from_slice(simd, bytes))
+    }
+
+    #[inline(always)]
+    pub(crate) fn from_pixels(pixels: u8x32<S>) -> Self {
+        let pixels: u16x16<S> = pixels.bitcast();
         Self {
             even: pixels & 0xff,
             odd: pixels >> 8,
         }
+    }
+
+    #[inline(always)]
+    pub(crate) fn pixels(self) -> u8x32<S> {
+        (self.even | (self.odd << 8)).bitcast()
     }
 
     #[inline(always)]
@@ -25,9 +35,7 @@ impl<S: Simd> Wide<S> {
 
     #[inline(always)]
     pub(crate) fn store(self, bytes: &mut [u8; 32]) {
-        (self.even | (self.odd << 8))
-            .bitcast::<u8x32<S>>()
-            .store_slice(bytes);
+        self.pixels().store_slice(bytes);
     }
 }
 

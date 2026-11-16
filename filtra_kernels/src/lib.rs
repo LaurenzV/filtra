@@ -7,6 +7,7 @@
 mod alpha;
 mod arithmetic;
 mod blend;
+mod blur;
 mod color_matrix;
 mod color_space;
 mod component_transfer;
@@ -25,6 +26,7 @@ mod turbulence;
 pub use alpha::alpha;
 pub use arithmetic::arithmetic;
 pub use blend::{BlendMode, blend};
+pub use blur::gaussian_blur;
 pub use color_matrix::color_matrix;
 pub use color_space::{ColorSpace, convert};
 pub use component_transfer::component_transfer;
