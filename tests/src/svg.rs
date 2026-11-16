@@ -3,8 +3,8 @@
 
 use filtra::types::{
     Blend, BlendMode, Color, ColorInterpolation, ColorMatrix, ComponentTransfer, Composite,
-    CompositeOperator, Filter, FilterFunction, Flood, Input, Merge, Node, Offset, Primitive, Rect,
-    Subregion, Tile, TransferFunction,
+    CompositeOperator, Filter, FilterFunction, Flood, Input, Merge, Morphology, MorphologyOperator,
+    Node, Offset, Primitive, Rect, Subregion, Tile, TransferFunction,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -109,6 +109,10 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                 let inputs = nodes.map(|node| resolve_input(node, "in", &results));
                 (Primitive::Merge(Merge), inputs.collect())
             }
+            "feMorphology" => {
+                let morphology = morphology(child);
+                (Primitive::Morphology(morphology), vec![input("in")])
+            }
             "feOffset" => {
                 let offset = Offset {
                     dx: number_or(child, "dx", 0.0),
@@ -205,6 +209,27 @@ fn color_matrix(node: XmlNode<'_, '_>) -> ColorMatrix {
         ("saturate" | "hueRotate", Some(_)) => identity,
         ("luminanceToAlpha", _) => ColorMatrix::LuminanceToAlpha,
         (other, _) => panic!("unsupported feColorMatrix type \"{other}\""),
+    }
+}
+
+/// `radius` with one number for both axes or two; anything else is the initial 0 (§9.17).
+fn morphology(node: XmlNode<'_, '_>) -> Morphology {
+    let radius = node.attribute("radius").map(numbers).unwrap_or_default();
+    let (radius_x, radius_y) = match *radius.as_slice() {
+        [r] => (r, r),
+        [x, y] => (x, y),
+        _ => (0.0, 0.0),
+    };
+    let operator = match node.attribute("operator").unwrap_or("erode") {
+        "erode" => MorphologyOperator::Erode,
+        "dilate" => MorphologyOperator::Dilate,
+        other => panic!("unsupported feMorphology operator \"{other}\""),
+    };
+
+    Morphology {
+        operator,
+        radius_x,
+        radius_y,
     }
 }
 

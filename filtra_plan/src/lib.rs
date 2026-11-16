@@ -13,7 +13,7 @@ mod planner;
 mod rect;
 
 pub use buffers::{Buffers, assign_buffers};
-pub use filtra_types::{BlendMode, CompositeOperator};
+pub use filtra_types::{BlendMode, CompositeOperator, MorphologyOperator};
 pub use planner::plan;
 pub use rect::IntRect;
 
@@ -119,6 +119,20 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    /// Sets each pixel to the component-wise minimum or maximum of an image over the
+    /// `2 rx + 1` by `2 ry + 1` pixels centered on it.
+    Morphology {
+        /// The source.
+        src: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// Whether to take the minimum or the maximum.
+        operator: MorphologyOperator,
+        /// The horizontal radius in pixels.
+        rx: u32,
+        /// The vertical radius in pixels.
+        ry: u32,
+    },
     /// Transforms the unpremultiplied colors of an image with a matrix.
     ColorMatrix {
         /// The source.
@@ -149,6 +163,7 @@ impl Pass for Step {
             Self::Convert { src, .. }
             | Self::Offset { src, .. }
             | Self::Tile { src, .. }
+            | Self::Morphology { src, .. }
             | Self::ColorMatrix { src, .. }
             | Self::ComponentTransfer { src, .. } => ([Some(*src), None], &[]),
             Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
@@ -171,6 +186,7 @@ impl Pass for Step {
             | Self::Composite { dst, .. }
             | Self::Blend { dst, .. }
             | Self::Merge { dst, .. }
+            | Self::Morphology { dst, .. }
             | Self::ColorMatrix { dst, .. }
             | Self::ComponentTransfer { dst, .. } => *dst,
         }

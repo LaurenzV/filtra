@@ -1,4 +1,6 @@
-use filtra_kernels::{BlendMode, ColorSpace, IntRect, Pixmap, PorterDuff, Source, Target};
+use filtra_kernels::{
+    BlendMode, ColorSpace, IntRect, MorphologyOperator, Pixmap, PorterDuff, Source, Target,
+};
 use filtra_plan::{CompositeOperator, Plan, Step};
 
 pub(crate) fn execute(plan: &Plan, source: &Pixmap) -> Pixmap {
@@ -73,6 +75,19 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
         Step::Merge { srcs, dst } => write(buffers, image(*dst), |buffers, target| {
             let srcs: Vec<Source<'_>> = srcs.iter().map(|src| read(buffers, image(*src))).collect();
             filtra_kernels::merge(&srcs, target);
+        }),
+        Step::Morphology {
+            src,
+            dst,
+            operator,
+            rx,
+            ry,
+        } => write(buffers, image(*dst), |buffers, target| {
+            let operator = match operator {
+                filtra_plan::MorphologyOperator::Erode => MorphologyOperator::Erode,
+                filtra_plan::MorphologyOperator::Dilate => MorphologyOperator::Dilate,
+            };
+            filtra_kernels::morphology(read(buffers, image(*src)), target, operator, *rx, *ry);
         }),
         Step::ColorMatrix { src, dst, matrix } => write(buffers, image(*dst), |buffers, target| {
             filtra_kernels::color_matrix(read(buffers, image(*src)), target, matrix);

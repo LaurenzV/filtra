@@ -11,6 +11,7 @@ mod flood;
 mod functions;
 mod linear_rgb;
 mod merge;
+mod morphology;
 mod offset;
 mod region;
 mod svg;

@@ -145,6 +145,26 @@ impl<'a> Planner<'a> {
                 composite: !blend.no_composite,
                 dst,
             },
+            // A radius that isn't positive disables the primitive, which passes its input on
+            // (§9.17). This includes a zero in only one of the two radii, which browsers instead
+            // treat as a window of one pixel along that axis.
+            (Primitive::Morphology(morphology), &[src])
+                if !(morphology.radius_x > 0.0 && morphology.radius_y > 0.0) =>
+            {
+                Step::Offset {
+                    src,
+                    dst,
+                    dx: 0,
+                    dy: 0,
+                }
+            }
+            (Primitive::Morphology(morphology), &[src]) => Step::Morphology {
+                src,
+                dst,
+                operator: morphology.operator,
+                rx: (morphology.radius_x * self.transform.sx).round() as u32,
+                ry: (morphology.radius_y * self.transform.sy).round() as u32,
+            },
             (Primitive::ColorMatrix(color_matrix), &[src]) => Step::ColorMatrix {
                 src,
                 dst,

@@ -3,6 +3,11 @@
 use crate::check_at;
 
 #[test]
+fn morphology() {
+    check_at("transform/morphology", 2);
+}
+
+#[test]
 fn offset() {
     check_at("transform/offset", 2);
 }
