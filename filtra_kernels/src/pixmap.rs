@@ -123,6 +123,20 @@ impl<'a> Source<'a> {
 
         Some(&self.pixmap.data[start..][columns])
     }
+
+    pub(crate) fn pixel(&self, x: i32, y: i32) -> Option<&'a [u8; 4]> {
+        let x = usize::try_from(i64::from(x) - i64::from(self.rect.x0)).ok()?;
+        let y = usize::try_from(i64::from(y) - i64::from(self.rect.y0)).ok()?;
+        let width = self.pixmap.width as usize;
+
+        if x >= width {
+            return None;
+        }
+
+        let index = y.checked_mul(width)?.checked_add(x)?;
+
+        self.pixmap.data.as_chunks().0.get(index)
+    }
 }
 
 /// A placed pixmap that a kernel writes completely.
