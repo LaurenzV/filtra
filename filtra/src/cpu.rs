@@ -1,5 +1,6 @@
 use filtra_kernels::{
-    BlendMode, ColorSpace, IntRect, MorphologyOperator, Pixmap, PorterDuff, Source, Target,
+    BlendMode, ColorChannel, ColorSpace, IntRect, MorphologyOperator, Pixmap, PorterDuff, Source,
+    Target,
 };
 use filtra_plan::{CompositeOperator, Plan, Step};
 
@@ -88,6 +89,22 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
                 filtra_plan::MorphologyOperator::Dilate => MorphologyOperator::Dilate,
             };
             filtra_kernels::morphology(read(buffers, image(*src)), target, operator, *rx, *ry);
+        }),
+        Step::DisplacementMap {
+            src,
+            map,
+            dst,
+            scale,
+            channels,
+        } => write(buffers, image(*dst), |buffers, target| {
+            let channels = channels.map(|channel| match channel {
+                filtra_plan::ColorChannel::R => ColorChannel::R,
+                filtra_plan::ColorChannel::G => ColorChannel::G,
+                filtra_plan::ColorChannel::B => ColorChannel::B,
+                filtra_plan::ColorChannel::A => ColorChannel::A,
+            });
+            let (src, map) = (read(buffers, image(*src)), read(buffers, image(*map)));
+            filtra_kernels::displacement_map(src, map, target, *scale, channels);
         }),
         Step::Turbulence {
             dst,

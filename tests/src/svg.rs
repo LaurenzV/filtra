@@ -2,9 +2,10 @@
 //! filtered either by one `<filter>` in user space or by a list of filter functions.
 
 use filtra::types::{
-    Blend, BlendMode, Color, ColorInterpolation, ColorMatrix, ComponentTransfer, Composite,
-    CompositeOperator, Filter, FilterFunction, Flood, Input, Merge, Morphology, MorphologyOperator,
-    Node, Offset, Primitive, Rect, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
+    Blend, BlendMode, Color, ColorChannel, ColorInterpolation, ColorMatrix, ComponentTransfer,
+    Composite, CompositeOperator, DisplacementMap, Filter, FilterFunction, Flood, Input, Merge,
+    Morphology, MorphologyOperator, Node, Offset, Primitive, Rect, Subregion, Tile,
+    TransferFunction, Turbulence, TurbulenceType,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -108,6 +109,17 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                 let nodes = child.children().filter(XmlNode::is_element);
                 let inputs = nodes.map(|node| resolve_input(node, "in", &results));
                 (Primitive::Merge(Merge), inputs.collect())
+            }
+            "feDisplacementMap" => {
+                let displacement = DisplacementMap {
+                    scale: number_or(child, "scale", 0.0),
+                    x_channel: color_channel(child, "xChannelSelector"),
+                    y_channel: color_channel(child, "yChannelSelector"),
+                };
+                (
+                    Primitive::DisplacementMap(displacement),
+                    vec![input("in"), input("in2")],
+                )
             }
             "feMorphology" => {
                 let morphology = morphology(child);
@@ -214,6 +226,16 @@ fn color_matrix(node: XmlNode<'_, '_>) -> ColorMatrix {
 }
 
 /// `radius` with one number for both axes or two; anything else is the initial 0 (§9.17).
+fn color_channel(node: XmlNode<'_, '_>, name: &str) -> ColorChannel {
+    match node.attribute(name).unwrap_or("A") {
+        "R" => ColorChannel::R,
+        "G" => ColorChannel::G,
+        "B" => ColorChannel::B,
+        "A" => ColorChannel::A,
+        other => panic!("unsupported {name} \"{other}\""),
+    }
+}
+
 fn morphology(node: XmlNode<'_, '_>) -> Morphology {
     let radius = node.attribute("radius").map(numbers).unwrap_or_default();
     let (radius_x, radius_y) = match *radius.as_slice() {

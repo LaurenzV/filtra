@@ -2,6 +2,8 @@
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct DisplacementMap {
     /// The displacement scale.
+    // TODO: A scale per axis, since with `primitiveUnits="objectBoundingBox"` the scale is in a
+    // coordinate system that stretches x by the box's width and y by its height (§9.11).
     pub scale: f32,
     /// The channel of the second input moving pixels along x.
     pub x_channel: ColorChannel,

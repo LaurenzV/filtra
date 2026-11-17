@@ -94,20 +94,28 @@ impl<'a> Planner<'a> {
             .collect();
         let first = slots.first().map(|&slot| self.outputs[slot].unwrap());
 
-        // `feOffset` and `feTile` move pixels without changing them, so their result stays in the
-        // color space of their input (§10).
+        let interpolation = match node.color_interpolation {
+            ColorInterpolation::LinearRgb => ColorSpace::LinearRgb,
+            ColorInterpolation::Srgb | ColorInterpolation::Auto => ColorSpace::Srgb,
+        };
+        // `feOffset`, `feTile` and `feDisplacementMap` move pixels without changing them, so their
+        // result stays in the color space of their input (§10). Only the displacement map is read
+        // in the primitive's color space (§9.11).
         let space = match (&node.primitive, first) {
             (Primitive::Flood(_), _) => ColorSpace::Srgb,
-            (Primitive::Offset(_) | Primitive::Tile(_), Some(first)) => first.space,
-            _ => match node.color_interpolation {
-                ColorInterpolation::LinearRgb => ColorSpace::LinearRgb,
-                ColorInterpolation::Srgb | ColorInterpolation::Auto => ColorSpace::Srgb,
-            },
+            (
+                Primitive::Offset(_) | Primitive::Tile(_) | Primitive::DisplacementMap(_),
+                Some(first),
+            ) => first.space,
+            _ => interpolation,
         };
+        let map = matches!(node.primitive, Primitive::DisplacementMap(_)).then_some(1);
 
-        let inputs: Vec<ImageId> = slots
-            .iter()
-            .map(|&slot| self.convert(slot, space))
+        let inputs: Vec<ImageId> = (slots.iter().enumerate())
+            .map(|(i, &slot)| {
+                let space = if Some(i) == map { interpolation } else { space };
+                self.convert(slot, space)
+            })
             .collect();
         let dst = self.image(subregion.intersect(&self.region));
         let step = match (&node.primitive, inputs.as_slice()) {
@@ -181,6 +189,16 @@ impl<'a> Planner<'a> {
                 stitch_tile: turbulence.stitch_tiles.then_some(subregion),
                 fractal_noise: turbulence.kind == TurbulenceType::FractalNoise,
                 origin: [self.transform.tx, self.transform.ty],
+            },
+            (Primitive::DisplacementMap(displacement), &[src, map]) => Step::DisplacementMap {
+                src,
+                map,
+                dst,
+                scale: [
+                    displacement.scale * self.transform.sx,
+                    displacement.scale * self.transform.sy,
+                ],
+                channels: [displacement.x_channel, displacement.y_channel],
             },
             (Primitive::ColorMatrix(color_matrix), &[src]) => Step::ColorMatrix {
                 src,

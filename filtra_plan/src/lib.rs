@@ -13,7 +13,7 @@ mod planner;
 mod rect;
 
 pub use buffers::{Buffers, assign_buffers};
-pub use filtra_types::{BlendMode, CompositeOperator, MorphologyOperator};
+pub use filtra_types::{BlendMode, ColorChannel, CompositeOperator, MorphologyOperator};
 pub use planner::plan;
 pub use rect::IntRect;
 
@@ -133,6 +133,19 @@ pub enum Step {
         /// The vertical radius in pixels.
         ry: u32,
     },
+    /// Moves the pixels of `src` by the channels of `map`.
+    DisplacementMap {
+        /// The source.
+        src: ImageId,
+        /// The displacement map.
+        map: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// The horizontal and vertical displacement scale in pixels.
+        scale: [f32; 2],
+        /// The channels of `map` moving pixels along x and y.
+        channels: [ColorChannel; 2],
+    },
     /// Fills with Perlin turbulence.
     Turbulence {
         /// The destination.
@@ -187,6 +200,7 @@ impl Pass for Step {
             Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
                 ([Some(*src), Some(*backdrop)], &[])
             }
+            Self::DisplacementMap { src, map, .. } => ([Some(*src), Some(*map)], &[]),
             Self::Merge { srcs, .. } => ([None, None], srcs),
         };
 
@@ -205,6 +219,7 @@ impl Pass for Step {
             | Self::Blend { dst, .. }
             | Self::Merge { dst, .. }
             | Self::Morphology { dst, .. }
+            | Self::DisplacementMap { dst, .. }
             | Self::Turbulence { dst, .. }
             | Self::ColorMatrix { dst, .. }
             | Self::ComponentTransfer { dst, .. } => *dst,
