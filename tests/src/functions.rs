@@ -58,6 +58,26 @@ fn contrast_zero() {
 }
 
 #[test]
+fn drop_shadow() {
+    check("functions/drop_shadow");
+}
+
+#[test]
+fn drop_shadow_color_first() {
+    check("functions/drop_shadow_color_first");
+}
+
+#[test]
+fn drop_shadow_sharp() {
+    check("functions/drop_shadow_sharp");
+}
+
+#[test]
+fn drop_shadow_then_grayscale() {
+    check("functions/drop_shadow_then_grayscale");
+}
+
+#[test]
 fn grayscale() {
     check("functions/grayscale");
 }

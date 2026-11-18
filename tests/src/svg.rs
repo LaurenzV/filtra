@@ -3,9 +3,9 @@
 
 use filtra::types::{
     Blend, BlendMode, Color, ColorChannel, ColorInterpolation, ColorMatrix, ComponentTransfer,
-    Composite, CompositeOperator, DisplacementMap, EdgeMode, Filter, FilterFunction, Flood,
-    GaussianBlur, Input, Merge, Morphology, MorphologyOperator, Node, Offset, Primitive, Rect,
-    Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
+    Composite, CompositeOperator, DisplacementMap, DropShadow, EdgeMode, Filter, FilterFunction,
+    Flood, GaussianBlur, Input, Merge, Morphology, MorphologyOperator, Node, Offset, Primitive,
+    Rect, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -97,6 +97,18 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                     Primitive::Composite(composite),
                     vec![input("in"), input("in2")],
                 )
+            }
+            "feDropShadow" => {
+                let (std_dev_x, std_dev_y) = std_deviation(child, 2.0);
+                let shadow = DropShadow {
+                    dx: number_or(child, "dx", 2.0),
+                    dy: number_or(child, "dy", 2.0),
+                    std_dev_x,
+                    std_dev_y,
+                    color: child.attribute("flood-color").map_or(Color::BLACK, color),
+                    opacity: number_or(child, "flood-opacity", 1.0),
+                };
+                (Primitive::DropShadow(shadow), vec![input("in")])
             }
             "feFlood" => {
                 let flood = Flood {
@@ -326,12 +338,7 @@ fn component_transfer(node: XmlNode<'_, '_>) -> ComponentTransfer {
 }
 
 fn gaussian_blur(node: XmlNode<'_, '_>) -> GaussianBlur {
-    // Anything but one or two numbers is an error, which leaves the initial value of 0 (§9.14).
-    let (std_dev_x, std_dev_y) = match node.attribute("stdDeviation").map(numbers).as_deref() {
-        Some(&[both]) => (both, both),
-        Some(&[x, y]) => (x, y),
-        _ => (0.0, 0.0),
-    };
+    let (std_dev_x, std_dev_y) = std_deviation(node, 0.0);
     let edge_mode = match node.attribute("edgeMode").unwrap_or("none") {
         "duplicate" => EdgeMode::Duplicate,
         "wrap" => EdgeMode::Wrap,
@@ -344,6 +351,15 @@ fn gaussian_blur(node: XmlNode<'_, '_>) -> GaussianBlur {
         std_dev_x,
         std_dev_y,
         edge_mode,
+    }
+}
+
+fn std_deviation(node: XmlNode<'_, '_>, initial: f32) -> (f32, f32) {
+    // Anything but one or two numbers is an error, which leaves the initial value.
+    match node.attribute("stdDeviation").map(numbers).as_deref() {
+        Some(&[both]) => (both, both),
+        Some(&[x, y]) => (x, y),
+        _ => (initial, initial),
     }
 }
 
@@ -378,6 +394,7 @@ fn filter_functions(value: &str, shapes: &[Shape]) -> Filter {
                 "blur" => FilterFunction::Blur(length(argument)),
                 "brightness" => FilterFunction::Brightness(amount(argument)),
                 "contrast" => FilterFunction::Contrast(amount(argument)),
+                "drop-shadow" => drop_shadow(argument),
                 "grayscale" => FilterFunction::Grayscale(amount(argument)),
                 "hue-rotate" => FilterFunction::HueRotate(angle(argument)),
                 "invert" => FilterFunction::Invert(amount(argument)),
@@ -402,6 +419,25 @@ fn filter_functions(value: &str, shapes: &[Shape]) -> Filter {
     );
 
     Filter::from_functions(&functions, bounds)
+}
+
+fn drop_shadow(argument: &str) -> FilterFunction {
+    // The color defaults to `currentcolor`, which is black in the tests.
+    let (colors, lengths): (Vec<&str>, Vec<&str>) = argument
+        .split_whitespace()
+        .partition(|part| part.starts_with('#'));
+    let (dx, dy, std_dev) = match lengths.as_slice() {
+        [dx, dy] => (length(dx), length(dy), 0.0),
+        [dx, dy, std_dev] => (length(dx), length(dy), length(std_dev)),
+        _ => panic!("invalid drop-shadow({argument})"),
+    };
+
+    FilterFunction::DropShadow {
+        dx,
+        dy,
+        std_dev,
+        color: colors.first().map_or(Color::BLACK, |value| color(value)),
+    }
 }
 
 fn amount(argument: &str) -> f32 {

@@ -7,6 +7,7 @@ mod color_matrix;
 mod component_transfer;
 mod composite;
 mod displacement_map;
+mod drop_shadow;
 mod filter;
 mod flood;
 mod functions;

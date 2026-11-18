@@ -1,6 +1,6 @@
 use filtra_types::{
-    ColorInterpolation, ColorMatrix, Filter, GaussianBlur, Input, Node, Primitive, Rect,
-    TransferFunction, TurbulenceType,
+    ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect, TransferFunction,
+    TurbulenceType,
 };
 
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
@@ -126,12 +126,10 @@ impl<'a> Planner<'a> {
                     .with_opacity(flood.opacity)
                     .to_premultiplied_rgba8(),
             },
-            (Primitive::Offset(offset), &[src]) => Step::Offset {
-                src,
-                dst,
-                dx: (offset.dx * self.transform.sx).round() as i64,
-                dy: (offset.dy * self.transform.sy).round() as i64,
-            },
+            (Primitive::Offset(offset), &[src]) => {
+                let [dx, dy] = self.offset(offset.dx, offset.dy);
+                Step::Offset { src, dst, dx, dy }
+            }
             (Primitive::Tile(_), &[src]) => Step::Tile {
                 src,
                 cell: first.unwrap().subregion,
@@ -218,8 +216,51 @@ impl<'a> Planner<'a> {
             (Primitive::GaussianBlur(blur), &[src]) => Step::GaussianBlur {
                 src,
                 dst,
-                std_dev: std_dev(blur, self.transform),
+                std_dev: std_dev([blur.std_dev_x, blur.std_dev_y], self.transform),
             },
+            (Primitive::DropShadow(shadow), &[src]) => {
+                let [dx, dy] = self.offset(shadow.dx, shadow.dy);
+                let source_rect = offset_source(self.rects[dst.0], dx, dy).intersect(&self.region);
+                let blurred = self.image(source_rect);
+                let colored = self.image(source_rect);
+                let shifted = self.image(self.rects[dst.0]);
+                let color = shadow.color.with_opacity(shadow.opacity);
+                let [r, g, b] = [color.r, color.g, color.b].map(|c| match space {
+                    ColorSpace::Srgb => c.clamp(0.0, 1.0),
+                    ColorSpace::LinearRgb => srgb_to_linear(c.clamp(0.0, 1.0)),
+                });
+                #[rustfmt::skip]
+                let matrix = [
+                    0.0, 0.0, 0.0, 0.0, r,
+                    0.0, 0.0, 0.0, 0.0, g,
+                    0.0, 0.0, 0.0, 0.0, b,
+                    0.0, 0.0, 0.0, color.a, 0.0,
+                ];
+
+                self.steps.extend([
+                    Step::GaussianBlur {
+                        src,
+                        dst: blurred,
+                        std_dev: std_dev([shadow.std_dev_x, shadow.std_dev_y], self.transform),
+                    },
+                    Step::ColorMatrix {
+                        src: blurred,
+                        dst: colored,
+                        matrix,
+                    },
+                    Step::Offset {
+                        src: colored,
+                        dst: shifted,
+                        dx,
+                        dy,
+                    },
+                ]);
+
+                Step::Merge {
+                    srcs: vec![shifted, src],
+                    dst,
+                }
+            }
             // TODO: The remaining primitives.
             _ => Step::Flood { dst, color: [0; 4] },
         };
@@ -277,6 +318,13 @@ impl<'a> Planner<'a> {
         self.outputs[slot].as_mut().unwrap().converted = Some(dst);
 
         dst
+    }
+
+    fn offset(&self, dx: f32, dy: f32) -> [i64; 2] {
+        [
+            (dx * self.transform.sx).round() as i64,
+            (dy * self.transform.sy).round() as i64,
+        ]
     }
 
     fn image(&mut self, rect: IntRect) -> ImageId {
@@ -338,12 +386,32 @@ fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
 }
 
 // TODO: `edgeMode` other than `none`.
-fn std_dev(blur: &GaussianBlur, transform: Transform) -> [f32; 2] {
+fn std_dev([x, y]: [f32; 2], transform: Transform) -> [f32; 2] {
     // A negative value disables the blur like zero does (§9.14), which browsers apply per axis.
-    [
-        blur.std_dev_x.max(0.0) * transform.sx,
-        blur.std_dev_y.max(0.0) * transform.sy,
-    ]
+    [x.max(0.0) * transform.sx, y.max(0.0) * transform.sy]
+}
+
+fn offset_source(rect: IntRect, dx: i64, dy: i64) -> IntRect {
+    let back = |edge: i32, delta: i64| {
+        i64::from(edge)
+            .saturating_sub(delta)
+            .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+    };
+
+    IntRect::new(
+        back(rect.x0, dx),
+        back(rect.y0, dy),
+        back(rect.x1, dx),
+        back(rect.y1, dy),
+    )
+}
+
+fn srgb_to_linear(c: f32) -> f32 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
 }
 
 fn regions(function: &TransferFunction) -> Vec<[f32; 2]> {

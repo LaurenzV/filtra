@@ -13,6 +13,11 @@ fn displacement_map() {
 }
 
 #[test]
+fn drop_shadow() {
+    check_at("transform/drop_shadow", 2);
+}
+
+#[test]
 fn morphology() {
     check_at("transform/morphology", 2);
 }
