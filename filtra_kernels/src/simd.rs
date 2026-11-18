@@ -1,3 +1,5 @@
+use core::f32::consts::LN_2;
+
 use fearless_simd::{Simd, SimdCvtFloat, f32x8, i32x8, prelude::*, u8x32, u16x16, u32x8};
 
 // Every byte stays in the 32-bit lane of its pixel, which avoids shuffles on x86.
@@ -136,4 +138,90 @@ pub(crate) fn premultiply<S: Simd>(channels: [f32x8<S>; 4]) -> [f32x8<S>; 4] {
     };
 
     [color(r), color(g), color(b), alpha]
+}
+
+#[inline(always)]
+pub(crate) fn pow<S: Simd>(base: f32x8<S>, exponent: f32) -> f32x8<S> {
+    // `0⁰` is 1, while `0 × log2(0)` would be NaN.
+    if exponent == 0.0 {
+        return f32x8::splat(base.simd, 1.0);
+    }
+
+    exp2(log2(base) * exponent)
+}
+
+// Writes `x = m · 2^k` with `m` in [√½, √2), where `t = (m − 1) / (m + 1)` stays within ±0.172, so
+// that the series `log2(m) = 2 / ln 2 · (t + t³/3 + t⁵/5 + …)` is exact to about 1e-9 after `t⁹`.
+#[inline(always)]
+fn log2<S: Simd>(x: f32x8<S>) -> f32x8<S> {
+    let simd = x.simd;
+    let bits: i32x8<S> = x.to_bits().bitcast();
+    let k = (bits - 0x3f35_04f3) >> 23;
+    let m = f32x8::from_bits((bits - (k << 23)).bitcast());
+    let t = (m - 1.0) / (m + 1.0);
+    let t2 = t * t;
+    let c = {
+        #[inline(always)]
+        |n: f32| f32x8::splat(simd, 2.0 / (n * LN_2))
+    };
+    let series = t2.mul_add(c(9.0), c(7.0));
+    let series = t2.mul_add(series, c(5.0));
+    let series = t2.mul_add(series, c(3.0));
+    let series = t2.mul_add(series, c(1.0));
+    let log = t.mul_add(series, f32x8::float_from(k));
+
+    x.simd_gt(0.0)
+        .select(log, f32x8::splat(simd, f32::NEG_INFINITY))
+}
+
+// Writes `x = n + f` with a whole `n` and `|f| ≤ ½`, and takes `2^f = e^(f ln 2)` from its Taylor
+// series, which is exact to about 1e-8 after the seventh power.
+#[inline(always)]
+fn exp2<S: Simd>(x: f32x8<S>) -> f32x8<S> {
+    let simd = x.simd;
+    let x = x.max(-126.0).min(126.0);
+    let n = x.round();
+    let f = (x - n) * LN_2;
+    let mut series = f32x8::splat(simd, 1.0);
+
+    for k in (1..=7).rev() {
+        series = (f * (1.0 / k as f32)).mul_add(series, 1.0);
+    }
+
+    let scale = f32x8::from_bits(((n.to_int::<i32x8<S>>() + 127) << 23).bitcast());
+
+    series * scale
+}
+
+#[cfg(test)]
+mod tests {
+    use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+
+    #[test]
+    fn pow_matches_f64() {
+        dispatch!(Level::new(), simd => check_pow(simd));
+    }
+
+    fn check_pow<S: Simd>(simd: S) {
+        let exponents = [
+            -2.0, -1.0, 0.0, 0.25, 0.5, 1.0, 2.0, 7.5, 20.0, 128.0, 1000.0,
+        ];
+        let bases = (0..=4096)
+            .map(|i| i as f32 / 4096.0)
+            .chain([1e-30, 1e-10, 1.5, 3.0, 1e10]);
+
+        for exponent in exponents {
+            for base in bases.clone() {
+                let actual = super::pow(f32x8::splat(simd, base), exponent).as_slice()[0];
+                let expected = f64::from(base).powf(f64::from(exponent));
+                let expected = if exponent == 0.0 { 1.0 } else { expected };
+                let error = (f64::from(actual) - expected).abs();
+
+                assert!(
+                    error <= 2e-5 * expected.max(1.0 / 255.0) || (expected > 1e30 && actual > 1e30),
+                    "{base}^{exponent}: got {actual}, expected {expected}"
+                );
+            }
+        }
+    }
 }
