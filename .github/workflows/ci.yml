@@ -41,3 +41,21 @@ jobs:
         env:
           # Tests AVX2 on x86, even on runners with AVX-512.
           RUSTFLAGS: --cfg disable_dispatch_avx512
+
+  test-wasm:
+    strategy:
+      matrix:
+        rustflags: ['', '-C target-feature=+simd128']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: taiki-e/install-action@wasmtime
+      - run: cargo test --workspace --all-features --release --target wasm32-wasip1
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
+          CARGO_TARGET_WASM32_WASIP1_RUNNER: wasmtime --dir ${{ github.workspace }}::${{ github.workspace }}
+          # Overflows show up on 32-bit targets.
+          CARGO_PROFILE_RELEASE_OVERFLOW_CHECKS: true
