@@ -67,7 +67,7 @@ pub use merge::merge;
 #[cfg(feature = "morphology")]
 pub use morphology::{MorphologyOperator, morphology};
 pub use offset::offset;
-pub use pixmap::{Pixmap, Source, Target};
+pub use pixmap::{Pixmap, PixmapMut, Source, Target};
 pub use rect::IntRect;
 #[cfg(feature = "tile")]
 pub use tile::tile;

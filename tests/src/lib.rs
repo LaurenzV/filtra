@@ -89,33 +89,32 @@ fn check_at(name: &str, scale: u32) {
 fn render(document: &Document, scale: u32) -> filtra::Pixmap {
     let (width, height) = (document.width * scale, document.height * scale);
     let scale_transform = Affine::scale(f64::from(scale));
-    let source = filtra::Pixmap::from_data(
+    let mut pixmap = filtra::Pixmap::from_data(
         rasterize(&document.shapes, width, height, scale_transform),
         width,
         height,
     );
 
-    match &document.filter {
-        Some(filter) => {
-            let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
-            filtra::apply(
-                filter,
-                &source,
-                transform,
-                |shapes, subregion, rect, data| {
-                    // Like `<use>`, a referenced element is placed at the subregion's origin.
-                    let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
-                        * scale_transform
-                        * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
-                    let image = rasterize(shapes, rect.width(), rect.height(), placement);
+    if let Some(filter) = &document.filter {
+        let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
+        filtra::apply(
+            filter,
+            pixmap.as_mut(),
+            transform,
+            |shapes, subregion, rect, data| {
+                // Like `<use>`, a referenced element is placed at the subregion's origin.
+                let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
+                    * scale_transform
+                    * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
+                let image = rasterize(shapes, rect.width(), rect.height(), placement);
 
-                    // Drawing over `data` instead of replacing it shows if it isn't transparent.
-                    draw_over(data, &image);
-                },
-            )
-        }
-        None => source,
+                // Drawing over `data` instead of replacing it shows if it isn't transparent.
+                draw_over(data, &image);
+            },
+        );
     }
+
+    pixmap
 }
 
 fn draw_over(data: &mut [u8], image: &[u8]) {

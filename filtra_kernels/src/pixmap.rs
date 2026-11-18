@@ -22,15 +22,7 @@ impl Pixmap {
     ///
     /// Panics if its length doesn't match.
     pub fn from_data(data: Vec<u8>, width: u32, height: u32) -> Self {
-        let len = (width as usize)
-            .checked_mul(height as usize)
-            .and_then(|pixels| pixels.checked_mul(4));
-
-        assert_eq!(
-            Some(data.len()),
-            len,
-            "the data length doesn't match the size"
-        );
+        check_len(data.len(), width, height);
 
         Self {
             width,
@@ -51,12 +43,7 @@ impl Pixmap {
 
     /// The rectangle covering every pixel.
     pub fn bounds(&self) -> IntRect {
-        IntRect::new(
-            0,
-            0,
-            self.width.min(i32::MAX as u32) as i32,
-            self.height.min(i32::MAX as u32) as i32,
-        )
+        bounds(self.width, self.height)
     }
 
     /// The premultiplied RGBA8 data.
@@ -76,33 +63,114 @@ impl Pixmap {
 
     /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel input.
     pub fn source(&self, x: i32, y: i32) -> Source<'_> {
-        Source {
-            rect: extent(x, y, self.width, self.height),
-            pixmap: self,
-        }
+        Source::new(&self.data, self.width, self.height, x, y)
     }
 
     /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel output.
     pub fn target(&mut self, x: i32, y: i32) -> Target<'_> {
-        Target {
-            rect: extent(x, y, self.width, self.height),
-            pixmap: self,
+        Target::new(&mut self.data, self.width, self.height, x, y)
+    }
+
+    /// The pixmap as a [`PixmapMut`].
+    pub fn as_mut(&mut self) -> PixmapMut<'_> {
+        PixmapMut {
+            width: self.width,
+            height: self.height,
+            data: &mut self.data,
+        }
+    }
+}
+
+/// Premultiplied RGBA8 pixels borrowed from elsewhere, stored row by row.
+#[derive(Debug)]
+pub struct PixmapMut<'a> {
+    width: u32,
+    height: u32,
+    data: &'a mut [u8],
+}
+
+impl<'a> PixmapMut<'a> {
+    /// Borrows premultiplied RGBA8 data as a pixmap.
+    ///
+    /// Panics if its length doesn't match.
+    pub fn from_data(data: &'a mut [u8], width: u32, height: u32) -> Self {
+        check_len(data.len(), width, height);
+
+        Self {
+            width,
+            height,
+            data,
         }
     }
 
-    fn stride(&self) -> usize {
-        (self.width as usize * 4).max(1)
+    /// The width in pixels.
+    pub fn width(&self) -> u32 {
+        self.width
     }
+
+    /// The height in pixels.
+    pub fn height(&self) -> u32 {
+        self.height
+    }
+
+    /// The rectangle covering every pixel.
+    pub fn bounds(&self) -> IntRect {
+        bounds(self.width, self.height)
+    }
+
+    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel input.
+    pub fn source(&self, x: i32, y: i32) -> Source<'_> {
+        Source::new(self.data, self.width, self.height, x, y)
+    }
+
+    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel output.
+    pub fn target(&mut self, x: i32, y: i32) -> Target<'_> {
+        Target::new(self.data, self.width, self.height, x, y)
+    }
+}
+
+fn check_len(len: usize, width: u32, height: u32) {
+    let expected = (width as usize)
+        .checked_mul(height as usize)
+        .and_then(|pixels| pixels.checked_mul(4));
+
+    assert_eq!(
+        Some(len),
+        expected,
+        "the data length doesn't match the size"
+    );
+}
+
+fn bounds(width: u32, height: u32) -> IntRect {
+    IntRect::new(
+        0,
+        0,
+        width.min(i32::MAX as u32) as i32,
+        height.min(i32::MAX as u32) as i32,
+    )
+}
+
+fn stride(width: u32) -> usize {
+    (width as usize * 4).max(1)
 }
 
 /// A placed pixmap that a kernel reads. Pixels outside of it are transparent black.
 #[derive(Debug, Clone, Copy)]
 pub struct Source<'a> {
-    pixmap: &'a Pixmap,
+    data: &'a [u8],
+    width: u32,
     rect: IntRect,
 }
 
 impl<'a> Source<'a> {
+    fn new(data: &'a [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
+        Self {
+            data,
+            width,
+            rect: extent(x, y, width, height),
+        }
+    }
+
     /// The pixels the pixmap covers.
     pub fn rect(&self) -> IntRect {
         self.rect
@@ -118,16 +186,16 @@ impl<'a> Source<'a> {
             return None;
         }
 
-        let start = (y - self.rect.y0) as usize * self.pixmap.stride();
+        let start = (y - self.rect.y0) as usize * stride(self.width);
         let columns = (x0 - self.rect.x0) as usize * 4..(x1 - self.rect.x0) as usize * 4;
 
-        Some(&self.pixmap.data[start..][columns])
+        Some(&self.data[start..][columns])
     }
 
     pub(crate) fn pixel(&self, x: i32, y: i32) -> Option<&'a [u8; 4]> {
         let x = usize::try_from(i64::from(x) - i64::from(self.rect.x0)).ok()?;
         let y = usize::try_from(i64::from(y) - i64::from(self.rect.y0)).ok()?;
-        let width = self.pixmap.width as usize;
+        let width = self.width as usize;
 
         if x >= width {
             return None;
@@ -135,18 +203,27 @@ impl<'a> Source<'a> {
 
         let index = y.checked_mul(width)?.checked_add(x)?;
 
-        self.pixmap.data.as_chunks().0.get(index)
+        self.data.as_chunks().0.get(index)
     }
 }
 
 /// A placed pixmap that a kernel writes completely.
 #[derive(Debug)]
 pub struct Target<'a> {
-    pixmap: &'a mut Pixmap,
+    data: &'a mut [u8],
+    width: u32,
     rect: IntRect,
 }
 
-impl Target<'_> {
+impl<'a> Target<'a> {
+    fn new(data: &'a mut [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
+        Self {
+            data,
+            width,
+            rect: extent(x, y, width, height),
+        }
+    }
+
     /// The pixels the pixmap covers.
     pub fn rect(&self) -> IntRect {
         self.rect
@@ -159,11 +236,10 @@ impl Target<'_> {
             self.rect.height() as usize
         };
 
-        let stride = self.pixmap.stride();
+        let stride = stride(self.width);
         let width = self.rect.width() as usize * 4;
 
-        self.pixmap
-            .data
+        self.data
             .chunks_exact_mut(stride)
             .take(rows)
             .zip(self.rect.y0..)
@@ -177,14 +253,12 @@ impl Target<'_> {
             self.rect.height() as usize
         };
 
-        let stride = self.pixmap.stride();
+        let stride = stride(self.width);
         let width = self.rect.width() as usize * 4;
 
         for row in period..rows {
             let start = (row - period) * stride;
-            self.pixmap
-                .data
-                .copy_within(start..start + width, row * stride);
+            self.data.copy_within(start..start + width, row * stride);
         }
     }
 }

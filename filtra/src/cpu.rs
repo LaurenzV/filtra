@@ -6,7 +6,7 @@ use filtra_kernels::ColorChannel;
 use filtra_kernels::MorphologyOperator;
 #[cfg(feature = "composite")]
 use filtra_kernels::PorterDuff;
-use filtra_kernels::{ColorSpace, IntRect, Pixmap, Source, Target};
+use filtra_kernels::{ColorSpace, IntRect, Pixmap, PixmapMut, Source, Target};
 #[cfg(feature = "convolve-matrix")]
 use filtra_kernels::{Convolution, EdgeMode};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
@@ -17,24 +17,22 @@ use filtra_plan::{Plan, Step};
 
 pub(crate) fn execute(
     plan: &Plan,
-    source: &Pixmap,
+    pixmap: &mut PixmapMut<'_>,
     render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
-) -> Pixmap {
+) {
     let assignment = filtra_plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
     let images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
         .map(|(&rect, buffer)| Image { buffer, rect })
         .collect();
     let mut buffers: Vec<Pixmap> = (0..assignment.count).map(|_| Pixmap::new(0, 0)).collect();
 
+    let source = pixmap.source(0, 0);
     for step in &plan.steps {
         execute_step(step, &images, source, render_image, &mut buffers);
     }
 
-    let mut output = Pixmap::new(source.width(), source.height());
     let result = images[plan.output.0];
-    filtra_kernels::offset(read(&buffers, result), output.target(0, 0), 0, 0);
-
-    output
+    filtra_kernels::offset(read(&buffers, result), pixmap.target(0, 0), 0, 0);
 }
 
 #[derive(Clone, Copy)]
@@ -46,7 +44,7 @@ struct Image {
 fn execute_step(
     step: &Step,
     images: &[Image],
-    source: &Pixmap,
+    source: Source<'_>,
     render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
     buffers: &mut [Pixmap],
 ) {
@@ -54,10 +52,10 @@ fn execute_step(
 
     match step {
         Step::SourceGraphic { dst } => write(buffers, image(*dst), |_, target| {
-            filtra_kernels::offset(source.source(0, 0), target, 0, 0);
+            filtra_kernels::offset(source, target, 0, 0);
         }),
         Step::SourceAlpha { dst } => write(buffers, image(*dst), |_, target| {
-            filtra_kernels::alpha(source.source(0, 0), target);
+            filtra_kernels::alpha(source, target);
         }),
         Step::Convert { src, dst, from, to } => write(buffers, image(*dst), |buffers, target| {
             let (from, to) = (color_space(*from), color_space(*to));
