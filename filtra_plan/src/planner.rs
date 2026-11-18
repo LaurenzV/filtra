@@ -1,6 +1,6 @@
 use filtra_types::{
-    ColorInterpolation, ColorMatrix, Filter, Input, Node, Primitive, Rect, TransferFunction,
-    TurbulenceType,
+    ColorInterpolation, ColorMatrix, ConvolveMatrix, Filter, Input, Node, Primitive, Rect,
+    TransferFunction, TurbulenceType,
 };
 
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
@@ -218,6 +218,26 @@ impl<'a> Planner<'a> {
                 dst,
                 std_dev: std_dev([blur.std_dev_x, blur.std_dev_y], self.transform),
             },
+            (Primitive::ConvolveMatrix(convolution), &[src]) => {
+                match convolve_matrix(convolution) {
+                    Some((size, weights, target)) => Step::ConvolveMatrix {
+                        src,
+                        dst,
+                        size,
+                        weights,
+                        target,
+                        bias: convolution.bias,
+                        edge_mode: convolution.edge_mode,
+                        preserve_alpha: convolution.preserve_alpha,
+                    },
+                    None => Step::Offset {
+                        src,
+                        dst,
+                        dx: 0,
+                        dy: 0,
+                    },
+                }
+            }
             (Primitive::DropShadow(shadow), &[src]) => {
                 let [dx, dy] = self.offset(shadow.dx, shadow.dy);
                 let source_rect = offset_source(self.rects[dst.0], dx, dy).intersect(&self.region);
@@ -412,6 +432,50 @@ fn srgb_to_linear(c: f32) -> f32 {
     } else {
         ((c + 0.055) / 1.055).powf(2.4)
     }
+}
+
+// TODO: `kernelUnitLength`, which is deprecated (§9.9).
+fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<([u32; 2], Vec<f32>, [u32; 2])> {
+    // An unsupported value invalidates its attribute ("Partial implementations"), which then
+    // takes its initial value.
+    let size = match [convolution.order_x, convolution.order_y] {
+        [0, _] | [_, 0] => [3, 3],
+        size => size,
+    };
+    let target = [
+        (convolution.target_x, size[0]),
+        (convolution.target_y, size[1]),
+    ]
+    .map(
+        |(target, len)| match target.and_then(|target| u32::try_from(target).ok()) {
+            Some(target) if target < len => target,
+            _ => len / 2,
+        },
+    );
+
+    // A kernel matrix with the wrong number of entries makes the primitive a pass-through (§9.9).
+    let len = u64::from(size[0]).checked_mul(u64::from(size[1]));
+
+    if Some(convolution.kernel.len() as u64) != len {
+        return None;
+    }
+
+    // `f64` keeps the sum of large weights finite.
+    let sum: f64 = convolution
+        .kernel
+        .iter()
+        .map(|&weight| f64::from(weight))
+        .sum();
+    let divisor = match convolution.divisor {
+        Some(divisor) if divisor != 0.0 && divisor.is_finite() => f64::from(divisor),
+        _ if sum == 0.0 => 1.0,
+        _ => sum,
+    };
+    // The kernel is rotated by 180° relative to the pixels it covers (§9.9).
+    let weights =
+        (convolution.kernel.iter().rev()).map(|&weight| (f64::from(weight) / divisor) as f32);
+
+    Some((size, weights.collect(), target))
 }
 
 fn regions(function: &TransferFunction) -> Vec<[f32; 2]> {

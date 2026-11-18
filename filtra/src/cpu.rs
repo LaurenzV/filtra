@@ -1,6 +1,6 @@
 use filtra_kernels::{
-    BlendMode, ColorChannel, ColorSpace, IntRect, MorphologyOperator, Pixmap, PorterDuff, Source,
-    Target,
+    BlendMode, ColorChannel, ColorSpace, Convolution, EdgeMode, IntRect, MorphologyOperator,
+    Pixmap, PorterDuff, Source, Target,
 };
 use filtra_plan::{CompositeOperator, Plan, Step};
 
@@ -136,6 +136,31 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
         } => write(buffers, image(*dst), |buffers, target| {
             let functions = functions.each_ref().map(Vec::as_slice);
             filtra_kernels::component_transfer(read(buffers, image(*src)), target, functions);
+        }),
+        Step::ConvolveMatrix {
+            src,
+            dst,
+            size,
+            weights,
+            target,
+            bias,
+            edge_mode,
+            preserve_alpha,
+        } => write(buffers, image(*dst), |buffers, output| {
+            let convolution = Convolution {
+                size: *size,
+                weights,
+                target: *target,
+                bias: *bias,
+                edge_mode: match edge_mode {
+                    filtra_plan::EdgeMode::Duplicate => EdgeMode::Duplicate,
+                    filtra_plan::EdgeMode::Wrap => EdgeMode::Wrap,
+                    filtra_plan::EdgeMode::Mirror => EdgeMode::Mirror,
+                    filtra_plan::EdgeMode::None => EdgeMode::None,
+                },
+                preserve_alpha: *preserve_alpha,
+            };
+            filtra_kernels::convolve_matrix(read(buffers, image(*src)), output, &convolution);
         }),
         Step::GaussianBlur { src, dst, std_dev } => {
             write(buffers, image(*dst), |buffers, target| {

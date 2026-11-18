@@ -13,7 +13,7 @@ mod planner;
 mod rect;
 
 pub use buffers::{Buffers, assign_buffers};
-pub use filtra_types::{BlendMode, ColorChannel, CompositeOperator, MorphologyOperator};
+pub use filtra_types::{BlendMode, ColorChannel, CompositeOperator, EdgeMode, MorphologyOperator};
 pub use planner::plan;
 pub use rect::IntRect;
 
@@ -182,6 +182,25 @@ pub enum Step {
         /// equal regions of `[0, 1]`.
         functions: [Vec<[f32; 2]>; 4],
     },
+    /// Sets each pixel to the sum of the pixels of `src` around it, weighted by a matrix.
+    ConvolveMatrix {
+        /// The source.
+        src: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// The number of columns and rows of `weights`.
+        size: [u32; 2],
+        /// The weights in row-major order, each multiplying the pixel it covers.
+        weights: Vec<f32>,
+        /// The column and row of the weight that covers the pixel being computed.
+        target: [u32; 2],
+        /// The value added to alpha, and times alpha to each color.
+        bias: f32,
+        /// How `src` is extended beyond the edges of `dst`.
+        edge_mode: EdgeMode,
+        /// Whether only the unpremultiplied colors are convolved, keeping alpha.
+        preserve_alpha: bool,
+    },
     /// Blurs an image with a Gaussian, treating it as transparent beyond its edges.
     GaussianBlur {
         /// The source.
@@ -206,6 +225,7 @@ impl Pass for Step {
             | Self::Morphology { src, .. }
             | Self::ColorMatrix { src, .. }
             | Self::ComponentTransfer { src, .. }
+            | Self::ConvolveMatrix { src, .. }
             | Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
             Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
                 ([Some(*src), Some(*backdrop)], &[])
@@ -233,6 +253,7 @@ impl Pass for Step {
             | Self::Turbulence { dst, .. }
             | Self::ColorMatrix { dst, .. }
             | Self::ComponentTransfer { dst, .. }
+            | Self::ConvolveMatrix { dst, .. }
             | Self::GaussianBlur { dst, .. } => *dst,
         }
     }

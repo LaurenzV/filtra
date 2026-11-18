@@ -3,9 +3,9 @@
 
 use filtra::types::{
     Blend, BlendMode, Color, ColorChannel, ColorInterpolation, ColorMatrix, ComponentTransfer,
-    Composite, CompositeOperator, DisplacementMap, DropShadow, EdgeMode, Filter, FilterFunction,
-    Flood, GaussianBlur, Input, Merge, Morphology, MorphologyOperator, Node, Offset, Primitive,
-    Rect, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
+    Composite, CompositeOperator, ConvolveMatrix, DisplacementMap, DropShadow, EdgeMode, Filter,
+    FilterFunction, Flood, GaussianBlur, Input, Merge, Morphology, MorphologyOperator, Node,
+    Offset, Primitive, Rect, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -98,6 +98,10 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                     vec![input("in"), input("in2")],
                 )
             }
+            "feConvolveMatrix" => (
+                Primitive::ConvolveMatrix(convolve_matrix(child)),
+                vec![input("in")],
+            ),
             "feDropShadow" => {
                 let (std_dev_x, std_dev_y) = std_deviation(child, 2.0);
                 let shadow = DropShadow {
@@ -351,6 +355,45 @@ fn gaussian_blur(node: XmlNode<'_, '_>) -> GaussianBlur {
         std_dev_x,
         std_dev_y,
         edge_mode,
+    }
+}
+
+fn convolve_matrix(node: XmlNode<'_, '_>) -> ConvolveMatrix {
+    // Orders are truncated (§9.9); 0 stands for anything below 1, which is unsupported.
+    let order = |value: f32| if value >= 1.0 { value as u32 } else { 0 };
+    let (order_x, order_y) = match node.attribute("order").map(numbers).as_deref() {
+        Some(&[both]) => (order(both), order(both)),
+        Some(&[x, y]) => (order(x), order(y)),
+        Some(_) => (0, 0),
+        None => (3, 3),
+    };
+    let integer = |name| {
+        optional_number(node, name)
+            .filter(|value| value.fract() == 0.0)
+            .map(|value| value as i32)
+    };
+    let edge_mode = match node.attribute("edgeMode").unwrap_or("duplicate") {
+        "duplicate" => EdgeMode::Duplicate,
+        "wrap" => EdgeMode::Wrap,
+        "mirror" => EdgeMode::Mirror,
+        "none" => EdgeMode::None,
+        other => panic!("invalid edgeMode \"{other}\""),
+    };
+
+    ConvolveMatrix {
+        order_x,
+        order_y,
+        kernel: node
+            .attribute("kernelMatrix")
+            .map(numbers)
+            .unwrap_or_default(),
+        divisor: optional_number(node, "divisor"),
+        bias: number_or(node, "bias", 0.0),
+        target_x: integer("targetX"),
+        target_y: integer("targetY"),
+        edge_mode,
+        kernel_unit_length: None,
+        preserve_alpha: node.attribute("preserveAlpha") == Some("true"),
     }
 }
 

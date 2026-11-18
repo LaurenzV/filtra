@@ -8,6 +8,11 @@ fn blur() {
 }
 
 #[test]
+fn convolve_matrix() {
+    check_at("transform/convolve_matrix", 2);
+}
+
+#[test]
 fn displacement_map() {
     check_at("transform/displacement_map", 2);
 }
