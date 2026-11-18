@@ -4,7 +4,11 @@ use filtra_kernels::{
 };
 use filtra_plan::{CompositeOperator, Plan, Step};
 
-pub(crate) fn execute(plan: &Plan, source: &Pixmap) -> Pixmap {
+pub(crate) fn execute(
+    plan: &Plan,
+    source: &Pixmap,
+    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
+) -> Pixmap {
     let assignment = filtra_plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
     let images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
         .map(|(&rect, buffer)| Image { buffer, rect })
@@ -12,7 +16,7 @@ pub(crate) fn execute(plan: &Plan, source: &Pixmap) -> Pixmap {
     let mut buffers: Vec<Pixmap> = (0..assignment.count).map(|_| Pixmap::new(0, 0)).collect();
 
     for step in &plan.steps {
-        execute_step(step, &images, source, &mut buffers);
+        execute_step(step, &images, source, render_image, &mut buffers);
     }
 
     let mut output = Pixmap::new(source.width(), source.height());
@@ -28,7 +32,13 @@ struct Image {
     rect: filtra_plan::IntRect,
 }
 
-fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [Pixmap]) {
+fn execute_step(
+    step: &Step,
+    images: &[Image],
+    source: &Pixmap,
+    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
+    buffers: &mut [Pixmap],
+) {
     let image = |id: filtra_plan::ImageId| images[id.0];
 
     match step {
@@ -45,6 +55,18 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
         Step::Flood { dst, color } => write(buffers, image(*dst), |_, target| {
             filtra_kernels::flood(target, *color);
         }),
+        Step::Image { dst, image: index } => {
+            let dst = image(*dst);
+            let mut pixmap = buffer(buffers, dst);
+            pixmap.data_mut().fill(0);
+
+            if !dst.rect.is_empty() {
+                let rect = IntRect::new(dst.rect.x0, dst.rect.y0, dst.rect.x1, dst.rect.y1);
+                render_image(*index, rect, pixmap.data_mut());
+            }
+
+            buffers[dst.buffer] = pixmap;
+        }
         Step::Offset { src, dst, dx, dy } => write(buffers, image(*dst), |buffers, target| {
             filtra_kernels::offset(read(buffers, image(*src)), target, *dx, *dy);
         }),
@@ -212,13 +234,17 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
 }
 
 fn write(buffers: &mut [Pixmap], dst: Image, f: impl FnOnce(&[Pixmap], Target<'_>)) {
+    let mut pixmap = buffer(buffers, dst);
+    f(buffers, pixmap.target(dst.rect.x0, dst.rect.y0));
+    buffers[dst.buffer] = pixmap;
+}
+
+fn buffer(buffers: &mut [Pixmap], dst: Image) -> Pixmap {
     let (width, height) = (dst.rect.width(), dst.rect.height());
     let mut data = std::mem::replace(&mut buffers[dst.buffer], Pixmap::new(0, 0)).into_data();
     data.resize(width as usize * height as usize * 4, 0);
 
-    let mut pixmap = Pixmap::from_data(data, width, height);
-    f(buffers, pixmap.target(dst.rect.x0, dst.rect.y0));
-    buffers[dst.buffer] = pixmap;
+    Pixmap::from_data(data, width, height)
 }
 
 fn read(buffers: &[Pixmap], image: Image) -> Source<'_> {

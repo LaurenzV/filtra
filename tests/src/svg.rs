@@ -15,8 +15,10 @@ pub struct Document {
     pub width: u32,
     pub height: u32,
     pub shapes: Vec<Shape>,
-    pub filter: Option<Filter>,
+    pub filter: Option<Filter<Image>>,
 }
+
+pub type Image = Vec<Shape>;
 
 pub struct Shape {
     pub path: BezPath,
@@ -26,7 +28,14 @@ pub struct Shape {
 pub fn parse(text: &str) -> Document {
     let tree = roxmltree::Document::parse(text).expect("invalid XML");
     let root = tree.root_element();
-    let shapes: Vec<Shape> = root.descendants().filter_map(shape).collect();
+    let shapes: Vec<Shape> = (root.descendants())
+        .filter(|node| {
+            !node
+                .ancestors()
+                .any(|ancestor| ancestor.has_tag_name("defs"))
+        })
+        .filter_map(shape)
+        .collect();
     let group = root.descendants().find(|node| node.has_tag_name("g"));
     let element = root.descendants().find(|node| node.has_tag_name("filter"));
 
@@ -61,7 +70,7 @@ fn shape(node: XmlNode<'_, '_>) -> Option<Shape> {
     Some(Shape { path, color })
 }
 
-fn filter(element: XmlNode<'_, '_>) -> Filter {
+fn filter(element: XmlNode<'_, '_>) -> Filter<Image> {
     let region = Rect::new(
         number(element, "x"),
         number(element, "y"),
@@ -145,6 +154,16 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                 Primitive::GaussianBlur(gaussian_blur(child)),
                 vec![input("in")],
             ),
+            "feImage" => {
+                let id = attribute(child, "href")
+                    .strip_prefix('#')
+                    .expect("feImage only references elements");
+                let referenced = (child.document().descendants())
+                    .find(|node| node.attribute("id") == Some(id))
+                    .unwrap_or_else(|| panic!("no element with id {id}"));
+                let image = referenced.descendants().filter_map(shape).collect();
+                (Primitive::Image(image), vec![])
+            }
             "feMerge" => {
                 let nodes = child.children().filter(XmlNode::is_element);
                 let inputs = nodes.map(|node| resolve_input(node, "in", &results));
@@ -475,7 +494,7 @@ fn composite_operator(node: XmlNode<'_, '_>) -> CompositeOperator {
     }
 }
 
-fn filter_functions(value: &str, shapes: &[Shape]) -> Filter {
+fn filter_functions(value: &str, shapes: &[Shape]) -> Filter<Image> {
     let functions: Vec<FilterFunction> = value
         .split(')')
         .map(str::trim)

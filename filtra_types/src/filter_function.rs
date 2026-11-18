@@ -41,7 +41,7 @@ pub enum FilterFunction {
 
 impl FilterFunction {
     /// The equivalent filter primitive.
-    pub fn to_primitive(&self) -> Primitive {
+    pub fn to_primitive<I>(&self) -> Primitive<I> {
         match *self {
             // TODO: `EdgeMode::Duplicate` (§13.1) once the planner supports edge modes.
             Self::Blur(std_dev) => Primitive::GaussianBlur(GaussianBlur {
@@ -134,7 +134,7 @@ impl FilterFunction {
     }
 }
 
-fn rgb_transfer(function: TransferFunction) -> Primitive {
+fn rgb_transfer<I>(function: TransferFunction) -> Primitive<I> {
     Primitive::ComponentTransfer(ComponentTransfer {
         red: function.clone(),
         green: function.clone(),

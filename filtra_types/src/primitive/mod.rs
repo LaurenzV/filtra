@@ -38,7 +38,7 @@ pub use turbulence::{Turbulence, TurbulenceType};
 
 /// A filter primitive.
 #[derive(Debug, Clone, PartialEq)]
-pub enum Primitive {
+pub enum Primitive<I> {
     /// `feBlend`.
     Blend(Blend),
     /// `feColorMatrix`.
@@ -59,7 +59,8 @@ pub enum Primitive {
     Flood(Flood),
     /// `feGaussianBlur`.
     GaussianBlur(GaussianBlur),
-    // TODO: `feImage`.
+    /// `feImage`.
+    Image(I),
     /// `feMerge`.
     Merge(Merge),
     /// `feMorphology`.

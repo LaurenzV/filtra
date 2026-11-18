@@ -23,6 +23,11 @@ fn drop_shadow() {
 }
 
 #[test]
+fn image() {
+    check_at("transform/image", 2);
+}
+
+#[test]
 fn lighting() {
     check_at("transform/lighting", 2);
 }

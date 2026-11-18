@@ -4,13 +4,13 @@ use crate::{ColorInterpolation, FilterFunction, Primitive};
 
 /// A `filter` element: its region and its primitives.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Filter {
+pub struct Filter<I> {
     /// The filter region in user space.
     pub region: Rect,
-    nodes: Vec<Node>,
+    nodes: Vec<Node<I>>,
 }
 
-impl Filter {
+impl<I> Filter<I> {
     /// Creates a filter with the given region and no primitives.
     pub fn new(region: Rect) -> Self {
         Self {
@@ -20,7 +20,7 @@ impl Filter {
     }
 
     /// Appends a node and returns the input that refers to its result.
-    pub fn push(&mut self, mut node: Node) -> Input {
+    pub fn push(&mut self, mut node: Node<I>) -> Input {
         let count = self.nodes.len();
         for input in &mut node.inputs {
             // A reference to a node that doesn't exist yet acts like a missing `in` (§9.2).
@@ -36,7 +36,7 @@ impl Filter {
     }
 
     /// The primitives in document order; the result of the last one is the filter's result.
-    pub fn nodes(&self) -> &[Node] {
+    pub fn nodes(&self) -> &[Node<I>] {
         &self.nodes
     }
 
@@ -100,9 +100,9 @@ impl Filter {
 
 /// A filter primitive with its inputs and common attributes.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Node {
+pub struct Node<I> {
     /// The primitive.
-    pub primitive: Primitive,
+    pub primitive: Primitive<I>,
     /// The inputs in the order the primitive takes them (`in`, `in2` or the merge nodes).
     pub inputs: Vec<Input>,
     /// The filter primitive subregion.
@@ -111,9 +111,9 @@ pub struct Node {
     pub color_interpolation: ColorInterpolation,
 }
 
-impl Node {
+impl<I> Node<I> {
     /// Creates a node without subregion attributes and with the initial color interpolation.
-    pub fn new(primitive: Primitive, inputs: impl IntoIterator<Item = Input>) -> Self {
+    pub fn new(primitive: Primitive<I>, inputs: impl IntoIterator<Item = Input>) -> Self {
         Self {
             primitive,
             inputs: inputs.into_iter().collect(),

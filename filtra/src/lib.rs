@@ -13,10 +13,25 @@ pub use filtra_types as types;
 /// Applies `filter` to `source`, whose pixels are placed in user space by `transform`.
 ///
 /// The result has the size of `source`.
-pub fn apply(filter: &types::Filter, source: &Pixmap, transform: Transform) -> Pixmap {
+pub fn apply<I>(
+    filter: &types::Filter<I>,
+    source: &Pixmap,
+    transform: Transform,
+    mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
+) -> Pixmap {
     let bounds = source.bounds();
     let bounds = filtra_plan::IntRect::new(bounds.x0, bounds.y0, bounds.x1, bounds.y1);
     let plan = filtra_plan::plan(filter, transform, bounds);
+    let images: Vec<(&I, types::Rect)> = (filter.nodes().iter())
+        .zip(filter.subregions())
+        .filter_map(|(node, subregion)| match &node.primitive {
+            types::Primitive::Image(image) => Some((image, subregion)),
+            _ => None,
+        })
+        .collect();
 
-    cpu::execute(&plan, source)
+    cpu::execute(&plan, source, &mut |image, rect, data| {
+        let (image, subregion) = images[image];
+        render_image(image, subregion, rect, data);
+    })
 }

@@ -68,6 +68,13 @@ pub enum Step {
         /// The color.
         color: [u8; 4],
     },
+    /// Fills with the image of an `feImage` node, which the caller renders.
+    Image {
+        /// The destination.
+        dst: ImageId,
+        /// The index of the image among the filter's `feImage` nodes, in document order.
+        image: usize,
+    },
     /// Moves an image by whole pixels.
     Offset {
         /// The source.
@@ -237,6 +244,7 @@ impl Pass for Step {
             Self::SourceGraphic { .. }
             | Self::SourceAlpha { .. }
             | Self::Flood { .. }
+            | Self::Image { .. }
             | Self::Turbulence { .. } => ([None, None], &[]),
             Self::Convert { src, .. }
             | Self::Offset { src, .. }
@@ -263,6 +271,7 @@ impl Pass for Step {
             | Self::SourceAlpha { dst }
             | Self::Convert { dst, .. }
             | Self::Flood { dst, .. }
+            | Self::Image { dst, .. }
             | Self::Offset { dst, .. }
             | Self::Tile { dst, .. }
             | Self::Composite { dst, .. }

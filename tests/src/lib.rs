@@ -14,6 +14,7 @@ mod filter;
 mod flood;
 mod functions;
 mod gaussian_blur;
+mod image;
 mod linear_rgb;
 mod merge;
 mod morphology;
@@ -38,7 +39,7 @@ use vello_cpu::{
     TargetInit,
 };
 
-use svg::Document;
+use svg::{Document, Shape};
 
 /// Set to write the results as the new references instead of comparing with them.
 const REPLACE: &str = "FILTRA_REPLACE";
@@ -87,10 +88,60 @@ fn check_at(name: &str, scale: u32) {
 
 fn render(document: &Document, scale: u32) -> filtra::Pixmap {
     let (width, height) = (document.width * scale, document.height * scale);
-    let mut context = RenderContext::new(width as u16, height as u16);
-    context.set_transform(Affine::scale(f64::from(scale)));
+    let scale_transform = Affine::scale(f64::from(scale));
+    let source = filtra::Pixmap::from_data(
+        rasterize(&document.shapes, width, height, scale_transform),
+        width,
+        height,
+    );
 
-    for shape in &document.shapes {
+    match &document.filter {
+        Some(filter) => {
+            let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
+            filtra::apply(
+                filter,
+                &source,
+                transform,
+                |shapes, subregion, rect, data| {
+                    // Like `<use>`, a referenced element is placed at the subregion's origin.
+                    let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
+                        * scale_transform
+                        * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
+                    let image = rasterize(shapes, rect.width(), rect.height(), placement);
+
+                    // Drawing over `data` instead of replacing it shows if it isn't transparent.
+                    draw_over(data, &image);
+                },
+            )
+        }
+        None => source,
+    }
+}
+
+fn draw_over(data: &mut [u8], image: &[u8]) {
+    for (pixel, color) in data
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(image.as_chunks::<4>().0)
+    {
+        let inverse = 255 - u16::from(color[3]);
+
+        for (value, &source) in pixel.iter_mut().zip(color) {
+            *value = (u16::from(source) + u16::from(*value) * inverse / 255) as u8;
+        }
+    }
+}
+
+fn rasterize(shapes: &[Shape], width: u32, height: u32, transform: Affine) -> Vec<u8> {
+    if width == 0 || height == 0 {
+        return Vec::new();
+    }
+
+    let mut context = RenderContext::new(width as u16, height as u16);
+    context.set_transform(transform);
+
+    for shape in shapes {
         let color = shape.color;
         let [r, g, b, a] = [color.r, color.g, color.b, color.a].map(|c| (c * 255.0).round() as u8);
         context.set_paint(AlphaColor::from_rgba8(r, g, b, a));
@@ -100,15 +151,8 @@ fn render(document: &Document, scale: u32) -> filtra::Pixmap {
     let mut target = Pixmap::new(width as u16, height as u16);
     context.flush();
     context.render(&mut target, &mut Resources::new());
-    let source = filtra::Pixmap::from_data(target.data_as_u8_slice().to_vec(), width, height);
 
-    match &document.filter {
-        Some(filter) => {
-            let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
-            filtra::apply(filter, &source, transform)
-        }
-        None => source,
-    }
+    target.data_as_u8_slice().to_vec()
 }
 
 fn on_white(result: filtra::Pixmap) -> Pixmap {

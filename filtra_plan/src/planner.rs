@@ -6,7 +6,7 @@ use filtra_types::{
 use crate::{ColorSpace, ImageId, IntRect, Light, Plan, Reflection, Step, Transform};
 
 /// Plans `filter` for a source image covering `bounds`.
-pub fn plan(filter: &Filter, transform: Transform, bounds: IntRect) -> Plan {
+pub fn plan<I>(filter: &Filter<I>, transform: Transform, bounds: IntRect) -> Plan {
     let mut planner = Planner::new(filter, transform, bounds);
     let output = planner.plan_output();
 
@@ -17,12 +17,14 @@ pub fn plan(filter: &Filter, transform: Transform, bounds: IntRect) -> Plan {
     }
 }
 
-struct Planner<'a> {
-    nodes: &'a [Node],
+struct Planner<'a, I> {
+    nodes: &'a [Node<I>],
     transform: Transform,
     /// The filter region, clipped to the source.
     region: IntRect,
     subregions: Vec<Rect>,
+    /// The number of `feImage` nodes before each node.
+    images_before: Vec<usize>,
     /// The outputs of the nodes, followed by `SourceGraphic` and `SourceAlpha`.
     outputs: Vec<Option<Output>>,
     steps: Vec<Step>,
@@ -40,15 +42,23 @@ struct Output {
     subregion: IntRect,
 }
 
-impl<'a> Planner<'a> {
-    fn new(filter: &'a Filter, transform: Transform, bounds: IntRect) -> Self {
+impl<'a, I> Planner<'a, I> {
+    fn new(filter: &'a Filter<I>, transform: Transform, bounds: IntRect) -> Self {
         let nodes = filter.nodes();
+        let images_before = (nodes.iter())
+            .scan(0, |count, node| {
+                let before = *count;
+                *count += usize::from(matches!(node.primitive, Primitive::Image(_)));
+                Some(before)
+            })
+            .collect();
 
         Self {
             nodes,
             transform,
             region: transform.covered_pixels(filter.region).intersect(&bounds),
             subregions: filter.subregions(),
+            images_before,
             outputs: vec![None; nodes.len() + 2],
             steps: Vec::new(),
             rects: Vec::new(),
@@ -102,7 +112,7 @@ impl<'a> Planner<'a> {
         // result stays in the color space of their input (§10). Only the displacement map is read
         // in the primitive's color space (§9.11).
         let space = match (&node.primitive, first) {
-            (Primitive::Flood(_), _) => ColorSpace::Srgb,
+            (Primitive::Flood(_) | Primitive::Image(_), _) => ColorSpace::Srgb,
             (
                 Primitive::Offset(_) | Primitive::Tile(_) | Primitive::DisplacementMap(_),
                 Some(first),
@@ -134,6 +144,10 @@ impl<'a> Planner<'a> {
                     .color
                     .with_opacity(flood.opacity)
                     .to_premultiplied_rgba8(),
+            },
+            (Primitive::Image(_), []) => Step::Image {
+                dst,
+                image: self.images_before[index],
             },
             (Primitive::Offset(offset), &[src]) => {
                 let [dx, dy] = self.offset(offset.dx, offset.dy);
@@ -730,19 +744,19 @@ mod tests {
         }
     }
 
-    fn filter() -> Filter {
+    fn filter() -> Filter<()> {
         Filter::new(Rect::new(0.0, 0.0, 100.0, 100.0))
     }
 
-    fn flood() -> Primitive {
+    fn flood() -> Primitive<()> {
         Primitive::Flood(Flood::default())
     }
 
-    fn offset() -> Primitive {
+    fn offset() -> Primitive<()> {
         Primitive::Offset(Offset { dx: 1.0, dy: 1.0 })
     }
 
-    fn srgb(primitive: Primitive, inputs: impl IntoIterator<Item = Input>) -> Node {
+    fn srgb(primitive: Primitive<()>, inputs: impl IntoIterator<Item = Input>) -> Node<()> {
         let mut node = Node::new(primitive, inputs);
         node.color_interpolation = ColorInterpolation::Srgb;
 
