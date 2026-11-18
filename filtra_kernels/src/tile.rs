@@ -12,13 +12,13 @@ pub fn tile(src: Source<'_>, cell: IntRect, mut dst: Target<'_>) {
         return;
     }
 
-    let period = cell.width() as usize * 4;
+    let period = (cell.width() as usize).saturating_mul(4);
     let first = wrap(rect.x0, cell.x0, cell.width());
 
     for (y, row) in dst.rows_mut().take(cell.height() as usize) {
         let source_y = wrap(y, cell.y0, cell.height());
         let filled = period.min(row.len());
-        let head = (((i64::from(cell.x1) - i64::from(first)) * 4) as usize).min(filled);
+        let head = ((i64::from(cell.x1) - i64::from(first)) * 4).min(filled as i64) as usize;
 
         read(src, source_y, first, &mut row[..head]);
         read(src, source_y, cell.x0, &mut row[head..filled]);
