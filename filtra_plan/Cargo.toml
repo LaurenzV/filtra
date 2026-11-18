@@ -7,4 +7,42 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-filtra_types = { path = "../filtra_types" }
+filtra_types = { path = "../filtra_types", default-features = false }
+
+[features]
+default = ["all"]
+all = [
+    "blend",
+    "color-matrix",
+    "component-transfer",
+    "composite",
+    "convolve-matrix",
+    "diffuse-lighting",
+    "displacement-map",
+    "drop-shadow",
+    "flood",
+    "gaussian-blur",
+    "merge",
+    "morphology",
+    "offset",
+    "specular-lighting",
+    "tile",
+    "turbulence",
+]
+css-functions = ["color-matrix", "component-transfer", "drop-shadow", "gaussian-blur"]
+blend = ["filtra_types/blend"]
+color-matrix = ["filtra_types/color-matrix"]
+component-transfer = ["filtra_types/component-transfer"]
+composite = ["filtra_types/composite"]
+convolve-matrix = ["filtra_types/convolve-matrix"]
+diffuse-lighting = ["filtra_types/diffuse-lighting"]
+displacement-map = ["filtra_types/displacement-map"]
+drop-shadow = ["filtra_types/drop-shadow", "gaussian-blur", "color-matrix", "merge"]
+flood = ["filtra_types/flood"]
+gaussian-blur = ["filtra_types/gaussian-blur"]
+merge = ["filtra_types/merge"]
+morphology = ["filtra_types/morphology"]
+offset = ["filtra_types/offset"]
+specular-lighting = ["filtra_types/specular-lighting"]
+tile = ["filtra_types/tile"]
+turbulence = ["filtra_types/turbulence"]

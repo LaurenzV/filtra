@@ -1,9 +1,24 @@
-use filtra_types::{
-    Color, ColorInterpolation, ColorMatrix, ConvolveMatrix, Filter, Input, LightSource, Node,
-    Primitive, Rect, TransferFunction, TurbulenceType,
-};
+#[cfg(any(
+    feature = "drop-shadow",
+    feature = "diffuse-lighting",
+    feature = "specular-lighting"
+))]
+use filtra_types::Color;
+#[cfg(feature = "color-matrix")]
+use filtra_types::ColorMatrix;
+#[cfg(feature = "convolve-matrix")]
+use filtra_types::ConvolveMatrix;
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+use filtra_types::LightSource;
+#[cfg(feature = "component-transfer")]
+use filtra_types::TransferFunction;
+#[cfg(feature = "turbulence")]
+use filtra_types::TurbulenceType;
+use filtra_types::{ColorInterpolation, Filter, Input, Node, Primitive, Rect};
 
-use crate::{ColorSpace, ImageId, IntRect, Light, Plan, Reflection, Step, Transform};
+use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+use crate::{Light, Reflection};
 
 /// Plans `filter` for a source image covering `bounds`.
 pub fn plan<I>(filter: &Filter<I>, transform: Transform, bounds: IntRect) -> Plan {
@@ -39,6 +54,7 @@ struct Output {
     /// The result in the other color space, if a step needs it.
     converted: Option<ImageId>,
     /// The subregion, not clipped to the filter region.
+    #[cfg(feature = "tile")]
     subregion: IntRect,
 }
 
@@ -112,19 +128,30 @@ impl<'a, I> Planner<'a, I> {
         // result stays in the color space of their input (§10). Only the displacement map is read
         // in the primitive's color space (§9.11).
         let space = match (&node.primitive, first) {
-            (Primitive::Flood(_) | Primitive::Image(_), _) => ColorSpace::Srgb,
-            (
-                Primitive::Offset(_) | Primitive::Tile(_) | Primitive::DisplacementMap(_),
-                Some(first),
-            ) => first.space,
+            (Primitive::Image(_), _) => ColorSpace::Srgb,
+            #[cfg(feature = "flood")]
+            (Primitive::Flood(_), _) => ColorSpace::Srgb,
+            #[cfg(feature = "offset")]
+            (Primitive::Offset(_), Some(first)) => first.space,
+            #[cfg(feature = "tile")]
+            (Primitive::Tile(_), Some(first)) => first.space,
+            #[cfg(feature = "displacement-map")]
+            (Primitive::DisplacementMap(_), Some(first)) => first.space,
             _ => interpolation,
         };
-        let map = matches!(node.primitive, Primitive::DisplacementMap(_)).then_some(1);
+        let map = match node.primitive {
+            #[cfg(feature = "displacement-map")]
+            Primitive::DisplacementMap(_) => Some(1),
+            _ => None,
+        };
         // Lighting only reads alpha (§9.10, §9.19), which no color space changes.
-        let alpha_only = matches!(
-            node.primitive,
-            Primitive::DiffuseLighting(_) | Primitive::SpecularLighting(_)
-        );
+        let alpha_only = match node.primitive {
+            #[cfg(feature = "diffuse-lighting")]
+            Primitive::DiffuseLighting(_) => true,
+            #[cfg(feature = "specular-lighting")]
+            Primitive::SpecularLighting(_) => true,
+            _ => false,
+        };
 
         let inputs: Vec<ImageId> = (slots.iter().enumerate())
             .map(|(i, &slot)| {
@@ -138,6 +165,7 @@ impl<'a, I> Planner<'a, I> {
             .collect();
         let dst = self.image(subregion.intersect(&self.region));
         let step = match (&node.primitive, inputs.as_slice()) {
+            #[cfg(feature = "flood")]
             (Primitive::Flood(flood), []) => Step::Flood {
                 dst,
                 color: flood
@@ -149,25 +177,30 @@ impl<'a, I> Planner<'a, I> {
                 dst,
                 image: self.images_before[index],
             },
+            #[cfg(feature = "offset")]
             (Primitive::Offset(offset), &[src]) => {
                 let [dx, dy] = self.offset(offset.dx, offset.dy);
                 Step::Offset { src, dst, dx, dy }
             }
+            #[cfg(feature = "tile")]
             (Primitive::Tile(_), &[src]) => Step::Tile {
                 src,
                 cell: first.unwrap().subregion,
                 dst,
             },
+            #[cfg(feature = "merge")]
             (Primitive::Merge(_), srcs) => Step::Merge {
                 srcs: srcs.to_vec(),
                 dst,
             },
+            #[cfg(feature = "composite")]
             (Primitive::Composite(composite), &[src, backdrop]) => Step::Composite {
                 src,
                 backdrop,
                 operator: composite.operator,
                 dst,
             },
+            #[cfg(feature = "blend")]
             (Primitive::Blend(blend), &[src, backdrop]) => Step::Blend {
                 src,
                 backdrop,
@@ -175,6 +208,7 @@ impl<'a, I> Planner<'a, I> {
                 composite: !blend.no_composite,
                 dst,
             },
+            #[cfg(feature = "morphology")]
             // A radius that isn't positive disables the primitive, which passes its input on
             // (§9.17). This includes a zero in only one of the two radii, which browsers instead
             // treat as a window of one pixel along that axis.
@@ -188,6 +222,7 @@ impl<'a, I> Planner<'a, I> {
                     dy: 0,
                 }
             }
+            #[cfg(feature = "morphology")]
             (Primitive::Morphology(morphology), &[src]) => Step::Morphology {
                 src,
                 dst,
@@ -195,6 +230,7 @@ impl<'a, I> Planner<'a, I> {
                 rx: (morphology.radius_x * self.transform.sx).round() as u32,
                 ry: (morphology.radius_y * self.transform.sy).round() as u32,
             },
+            #[cfg(feature = "turbulence")]
             // Negative values are unsupported (§9.21), and an unsupported value invalidates the
             // whole attribute ("Partial implementations"), which then takes its initial value.
             (Primitive::Turbulence(turbulence), []) => Step::Turbulence {
@@ -211,6 +247,7 @@ impl<'a, I> Planner<'a, I> {
                 fractal_noise: turbulence.kind == TurbulenceType::FractalNoise,
                 origin: [self.transform.tx, self.transform.ty],
             },
+            #[cfg(feature = "displacement-map")]
             (Primitive::DisplacementMap(displacement), &[src, map]) => Step::DisplacementMap {
                 src,
                 map,
@@ -221,11 +258,13 @@ impl<'a, I> Planner<'a, I> {
                 ],
                 channels: [displacement.x_channel, displacement.y_channel],
             },
+            #[cfg(feature = "color-matrix")]
             (Primitive::ColorMatrix(color_matrix), &[src]) => Step::ColorMatrix {
                 src,
                 dst,
                 matrix: matrix(color_matrix),
             },
+            #[cfg(feature = "component-transfer")]
             (Primitive::ComponentTransfer(transfer), &[src]) => Step::ComponentTransfer {
                 src,
                 dst,
@@ -236,11 +275,13 @@ impl<'a, I> Planner<'a, I> {
                     regions(&transfer.alpha),
                 ],
             },
+            #[cfg(feature = "gaussian-blur")]
             (Primitive::GaussianBlur(blur), &[src]) => Step::GaussianBlur {
                 src,
                 dst,
                 std_dev: std_dev([blur.std_dev_x, blur.std_dev_y], self.transform),
             },
+            #[cfg(feature = "diffuse-lighting")]
             // TODO: `kernelUnitLength`, which is deprecated (§9.10, §9.19).
             (Primitive::DiffuseLighting(diffuse), &[src]) => Step::Lighting {
                 src,
@@ -254,6 +295,7 @@ impl<'a, I> Planner<'a, I> {
                 scale: [self.transform.sx, self.transform.sy],
                 origin: [self.transform.tx, self.transform.ty],
             },
+            #[cfg(feature = "specular-lighting")]
             (Primitive::SpecularLighting(specular), &[src]) => Step::Lighting {
                 src,
                 dst,
@@ -267,6 +309,7 @@ impl<'a, I> Planner<'a, I> {
                 scale: [self.transform.sx, self.transform.sy],
                 origin: [self.transform.tx, self.transform.ty],
             },
+            #[cfg(feature = "convolve-matrix")]
             (Primitive::ConvolveMatrix(convolution), &[src]) => {
                 match convolve_matrix(convolution) {
                     Some((size, weights, target)) => Step::ConvolveMatrix {
@@ -287,6 +330,7 @@ impl<'a, I> Planner<'a, I> {
                     },
                 }
             }
+            #[cfg(feature = "drop-shadow")]
             (Primitive::DropShadow(shadow), &[src]) => {
                 let [dx, dy] = self.offset(shadow.dx, shadow.dy);
                 let source_rect = offset_source(self.rects[dst.0], dx, dy).intersect(&self.region);
@@ -327,7 +371,7 @@ impl<'a, I> Planner<'a, I> {
                     dst,
                 }
             }
-            // TODO: The remaining primitives.
+            // A node with the wrong number of inputs for its primitive is transparent.
             _ => Step::Flood { dst, color: [0; 4] },
         };
 
@@ -336,6 +380,7 @@ impl<'a, I> Planner<'a, I> {
             image: dst,
             space,
             converted: None,
+            #[cfg(feature = "tile")]
             subregion,
         });
     }
@@ -356,6 +401,7 @@ impl<'a, I> Planner<'a, I> {
                 image: dst,
                 space: ColorSpace::Srgb,
                 converted: None,
+                #[cfg(feature = "tile")]
                 subregion: self.region,
             });
         }
@@ -386,6 +432,7 @@ impl<'a, I> Planner<'a, I> {
         dst
     }
 
+    #[cfg(any(feature = "offset", feature = "drop-shadow"))]
     fn offset(&self, dx: f32, dy: f32) -> [i64; 2] {
         [
             (dx * self.transform.sx).round() as i64,
@@ -417,6 +464,7 @@ impl Transform {
     }
 }
 
+#[cfg(feature = "color-matrix")]
 fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
     match *color_matrix {
         ColorMatrix::Matrix(matrix) => matrix,
@@ -451,12 +499,14 @@ fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
     }
 }
 
+#[cfg(feature = "gaussian-blur")]
 // TODO: `edgeMode` other than `none`.
 fn std_dev([x, y]: [f32; 2], transform: Transform) -> [f32; 2] {
     // A negative value disables the blur like zero does (§9.14), which browsers apply per axis.
     [x.max(0.0) * transform.sx, y.max(0.0) * transform.sy]
 }
 
+#[cfg(feature = "drop-shadow")]
 fn offset_source(rect: IntRect, dx: i64, dy: i64) -> IntRect {
     let back = |edge: i32, delta: i64| {
         i64::from(edge)
@@ -472,6 +522,7 @@ fn offset_source(rect: IntRect, dx: i64, dy: i64) -> IntRect {
     )
 }
 
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 fn light(source: LightSource) -> Light {
     match source {
         LightSource::Distant(light) => {
@@ -513,6 +564,11 @@ fn light(source: LightSource) -> Light {
     }
 }
 
+#[cfg(any(
+    feature = "drop-shadow",
+    feature = "diffuse-lighting",
+    feature = "specular-lighting"
+))]
 fn color_in(color: Color, space: ColorSpace) -> [f32; 3] {
     [color.r, color.g, color.b].map(|c| match space {
         ColorSpace::Srgb => c.clamp(0.0, 1.0),
@@ -520,6 +576,11 @@ fn color_in(color: Color, space: ColorSpace) -> [f32; 3] {
     })
 }
 
+#[cfg(any(
+    feature = "drop-shadow",
+    feature = "diffuse-lighting",
+    feature = "specular-lighting"
+))]
 fn srgb_to_linear(c: f32) -> f32 {
     if c <= 0.04045 {
         c / 12.92
@@ -528,6 +589,7 @@ fn srgb_to_linear(c: f32) -> f32 {
     }
 }
 
+#[cfg(feature = "convolve-matrix")]
 // TODO: `kernelUnitLength`, which is deprecated (§9.9).
 fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<([u32; 2], Vec<f32>, [u32; 2])> {
     // An unsupported value invalidates its attribute ("Partial implementations"), which then
@@ -572,6 +634,7 @@ fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<([u32; 2], Vec<f32>, 
     Some((size, weights.collect(), target))
 }
 
+#[cfg(feature = "component-transfer")]
 fn regions(function: &TransferFunction) -> Vec<[f32; 2]> {
     match function {
         TransferFunction::Identity => vec![[0.0, 1.0]],
@@ -598,7 +661,7 @@ fn regions(function: &TransferFunction) -> Vec<[f32; 2]> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "all"))]
 mod tests {
     use filtra_types::{Composite, Flood, Merge, Offset, Tile};
 

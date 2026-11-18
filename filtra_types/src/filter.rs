@@ -1,6 +1,13 @@
 use alloc::vec::Vec;
 
-use crate::{ColorInterpolation, FilterFunction, Primitive};
+#[cfg(any(
+    feature = "gaussian-blur",
+    feature = "drop-shadow",
+    feature = "component-transfer",
+    feature = "color-matrix"
+))]
+use crate::FilterFunction;
+use crate::{ColorInterpolation, Primitive};
 
 /// A `filter` element: its region and its primitives.
 #[derive(Debug, Clone, PartialEq)]
@@ -47,7 +54,7 @@ impl<I> Filter<I> {
         for node in &self.nodes {
             // Missing attributes default to the union of the input subregions, or to the filter
             // region for nodes without inputs, with a standard input, and for `feTile`.
-            let uses_region = matches!(node.primitive, Primitive::Tile(_))
+            let uses_region = is_tile(&node.primitive)
                 || node
                     .inputs
                     .iter()
@@ -71,25 +78,17 @@ impl<I> Filter<I> {
     }
 
     /// The filter equivalent to a list of filter functions applied to content within `bounds`.
+    #[cfg(any(
+        feature = "gaussian-blur",
+        feature = "drop-shadow",
+        feature = "component-transfer",
+        feature = "color-matrix"
+    ))]
     pub fn from_functions(functions: &[FilterFunction], bounds: Rect) -> Self {
         let mut filter = Self::new(bounds);
         let mut input = Input::SourceGraphic;
         for function in functions {
-            // A blur visibly extends the content by about 3 standard deviations on each side.
-            match *function {
-                FilterFunction::Blur(std_dev) => {
-                    filter.region = filter.region.outset(3.0 * std_dev.max(0.0));
-                }
-                FilterFunction::DropShadow {
-                    dx, dy, std_dev, ..
-                } => {
-                    let mut shadow = filter.region.outset(3.0 * std_dev.max(0.0));
-                    shadow.x += dx;
-                    shadow.y += dy;
-                    filter.region = filter.region.union(shadow);
-                }
-                _ => {}
-            }
+            filter.region = function.extend(filter.region);
             let mut node = Node::new(function.to_primitive(), [input]);
             node.color_interpolation = ColorInterpolation::Srgb;
             input = filter.push(node);
@@ -184,7 +183,8 @@ impl Rect {
         }
     }
 
-    fn outset(self, amount: f32) -> Self {
+    #[cfg(any(feature = "gaussian-blur", feature = "drop-shadow"))]
+    pub(crate) fn outset(self, amount: f32) -> Self {
         Self::new(
             self.x - amount,
             self.y - amount,
@@ -193,11 +193,19 @@ impl Rect {
         )
     }
 
-    fn union(self, other: Self) -> Self {
+    pub(crate) fn union(self, other: Self) -> Self {
         let x0 = self.x.min(other.x);
         let y0 = self.y.min(other.y);
         let x1 = (self.x + self.width).max(other.x + other.width);
         let y1 = (self.y + self.height).max(other.y + other.height);
         Self::new(x0, y0, x1 - x0, y1 - y0)
+    }
+}
+
+fn is_tile<I>(primitive: &Primitive<I>) -> bool {
+    match primitive {
+        #[cfg(feature = "tile")]
+        Primitive::Tile(_) => true,
+        _ => false,
     }
 }

@@ -7,6 +7,44 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-filtra_kernels = { path = "../filtra_kernels" }
-filtra_types = { path = "../filtra_types" }
-filtra_plan = { path = "../filtra_plan" }
+filtra_kernels = { path = "../filtra_kernels", default-features = false }
+filtra_types = { path = "../filtra_types", default-features = false }
+filtra_plan = { path = "../filtra_plan", default-features = false }
+
+[features]
+default = ["all"]
+all = [
+    "blend",
+    "color-matrix",
+    "component-transfer",
+    "composite",
+    "convolve-matrix",
+    "diffuse-lighting",
+    "displacement-map",
+    "drop-shadow",
+    "flood",
+    "gaussian-blur",
+    "merge",
+    "morphology",
+    "offset",
+    "specular-lighting",
+    "tile",
+    "turbulence",
+]
+css-functions = ["color-matrix", "component-transfer", "drop-shadow", "gaussian-blur"]
+blend = ["filtra_plan/blend", "filtra_kernels/blend"]
+color-matrix = ["filtra_plan/color-matrix", "filtra_kernels/color-matrix"]
+component-transfer = ["filtra_plan/component-transfer", "filtra_kernels/component-transfer"]
+composite = ["filtra_plan/composite", "filtra_kernels/composite"]
+convolve-matrix = ["filtra_plan/convolve-matrix", "filtra_kernels/convolve-matrix"]
+diffuse-lighting = ["filtra_plan/diffuse-lighting", "filtra_kernels/diffuse-lighting"]
+displacement-map = ["filtra_plan/displacement-map", "filtra_kernels/displacement-map"]
+drop-shadow = ["filtra_plan/drop-shadow", "filtra_kernels/drop-shadow"]
+flood = ["filtra_plan/flood", "filtra_kernels/flood"]
+gaussian-blur = ["filtra_plan/gaussian-blur", "filtra_kernels/gaussian-blur"]
+merge = ["filtra_plan/merge", "filtra_kernels/merge"]
+morphology = ["filtra_plan/morphology", "filtra_kernels/morphology"]
+offset = ["filtra_plan/offset", "filtra_kernels/offset"]
+specular-lighting = ["filtra_plan/specular-lighting", "filtra_kernels/specular-lighting"]
+tile = ["filtra_plan/tile", "filtra_kernels/tile"]
+turbulence = ["filtra_plan/turbulence", "filtra_kernels/turbulence"]

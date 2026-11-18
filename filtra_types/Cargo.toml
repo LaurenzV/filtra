@@ -7,3 +7,41 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+
+[features]
+default = ["all"]
+all = [
+    "blend",
+    "color-matrix",
+    "component-transfer",
+    "composite",
+    "convolve-matrix",
+    "diffuse-lighting",
+    "displacement-map",
+    "drop-shadow",
+    "flood",
+    "gaussian-blur",
+    "merge",
+    "morphology",
+    "offset",
+    "specular-lighting",
+    "tile",
+    "turbulence",
+]
+css-functions = ["color-matrix", "component-transfer", "drop-shadow", "gaussian-blur"]
+blend = []
+color-matrix = []
+component-transfer = []
+composite = []
+convolve-matrix = []
+diffuse-lighting = []
+displacement-map = []
+drop-shadow = []
+flood = []
+gaussian-blur = []
+merge = []
+morphology = []
+offset = []
+specular-lighting = []
+tile = []
+turbulence = []
