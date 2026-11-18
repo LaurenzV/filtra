@@ -1,8 +1,19 @@
-use filtra_kernels::{
-    BlendMode, ColorChannel, ColorSpace, Convolution, EdgeMode, IntRect, Light, Lighting,
-    MorphologyOperator, Pixmap, PorterDuff, Reflection, Source, Target,
-};
-use filtra_plan::{CompositeOperator, Plan, Step};
+#[cfg(feature = "blend")]
+use filtra_kernels::BlendMode;
+#[cfg(feature = "displacement-map")]
+use filtra_kernels::ColorChannel;
+#[cfg(feature = "morphology")]
+use filtra_kernels::MorphologyOperator;
+#[cfg(feature = "composite")]
+use filtra_kernels::PorterDuff;
+use filtra_kernels::{ColorSpace, IntRect, Pixmap, Source, Target};
+#[cfg(feature = "convolve-matrix")]
+use filtra_kernels::{Convolution, EdgeMode};
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+use filtra_kernels::{Light, Lighting, Reflection};
+#[cfg(feature = "composite")]
+use filtra_plan::CompositeOperator;
+use filtra_plan::{Plan, Step};
 
 pub(crate) fn execute(
     plan: &Plan,
@@ -70,10 +81,12 @@ fn execute_step(
         Step::Offset { src, dst, dx, dy } => write(buffers, image(*dst), |buffers, target| {
             filtra_kernels::offset(read(buffers, image(*src)), target, *dx, *dy);
         }),
+        #[cfg(feature = "tile")]
         Step::Tile { src, cell, dst } => write(buffers, image(*dst), |buffers, target| {
             let cell = IntRect::new(cell.x0, cell.y0, cell.x1, cell.y1);
             filtra_kernels::tile(read(buffers, image(*src)), cell, target);
         }),
+        #[cfg(feature = "composite")]
         Step::Composite {
             src,
             backdrop,
@@ -84,6 +97,7 @@ fn execute_step(
             let backdrop = read(buffers, image(*backdrop));
             composite(src, backdrop, *operator, target);
         }),
+        #[cfg(feature = "blend")]
         Step::Blend {
             src,
             backdrop,
@@ -95,10 +109,12 @@ fn execute_step(
             let backdrop = read(buffers, image(*backdrop));
             filtra_kernels::blend(src, backdrop, blend_mode(*mode), *composite, target);
         }),
+        #[cfg(feature = "merge")]
         Step::Merge { srcs, dst } => write(buffers, image(*dst), |buffers, target| {
             let srcs: Vec<Source<'_>> = srcs.iter().map(|src| read(buffers, image(*src))).collect();
             filtra_kernels::merge(&srcs, target);
         }),
+        #[cfg(feature = "morphology")]
         Step::Morphology {
             src,
             dst,
@@ -112,6 +128,7 @@ fn execute_step(
             };
             filtra_kernels::morphology(read(buffers, image(*src)), target, operator, *rx, *ry);
         }),
+        #[cfg(feature = "displacement-map")]
         Step::DisplacementMap {
             src,
             map,
@@ -128,6 +145,7 @@ fn execute_step(
             let (src, map) = (read(buffers, image(*src)), read(buffers, image(*map)));
             filtra_kernels::displacement_map(src, map, target, *scale, channels);
         }),
+        #[cfg(feature = "turbulence")]
         Step::Turbulence {
             dst,
             base_frequency,
@@ -148,9 +166,11 @@ fn execute_step(
             };
             filtra_kernels::turbulence(target, &turbulence);
         }),
+        #[cfg(feature = "color-matrix")]
         Step::ColorMatrix { src, dst, matrix } => write(buffers, image(*dst), |buffers, target| {
             filtra_kernels::color_matrix(read(buffers, image(*src)), target, matrix);
         }),
+        #[cfg(feature = "component-transfer")]
         Step::ComponentTransfer {
             src,
             dst,
@@ -159,6 +179,7 @@ fn execute_step(
             let functions = functions.each_ref().map(Vec::as_slice);
             filtra_kernels::component_transfer(read(buffers, image(*src)), target, functions);
         }),
+        #[cfg(feature = "convolve-matrix")]
         Step::ConvolveMatrix {
             src,
             dst,
@@ -184,6 +205,7 @@ fn execute_step(
             };
             filtra_kernels::convolve_matrix(read(buffers, image(*src)), output, &convolution);
         }),
+        #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
         Step::Lighting {
             src,
             dst,
@@ -225,11 +247,14 @@ fn execute_step(
             };
             filtra_kernels::lighting(read(buffers, image(*src)), output, &lighting);
         }),
+        #[cfg(feature = "gaussian-blur")]
         Step::GaussianBlur { src, dst, std_dev } => {
             write(buffers, image(*dst), |buffers, target| {
                 filtra_kernels::gaussian_blur(read(buffers, image(*src)), target, *std_dev);
             })
         }
+        // A dependency can enable a primitive on `filtra_plan` without enabling it here.
+        step => panic!("`filtra` is built without the feature for {step:?}"),
     }
 }
 
@@ -251,6 +276,7 @@ fn read(buffers: &[Pixmap], image: Image) -> Source<'_> {
     buffers[image.buffer].source(image.rect.x0, image.rect.y0)
 }
 
+#[cfg(feature = "blend")]
 fn blend_mode(mode: filtra_plan::BlendMode) -> BlendMode {
     match mode {
         filtra_plan::BlendMode::Normal => BlendMode::Normal,
@@ -279,6 +305,7 @@ fn color_space(space: filtra_plan::ColorSpace) -> ColorSpace {
     }
 }
 
+#[cfg(feature = "composite")]
 fn composite(src: Source<'_>, backdrop: Source<'_>, operator: CompositeOperator, dst: Target<'_>) {
     let operator = match operator {
         CompositeOperator::Over => PorterDuff::Over,

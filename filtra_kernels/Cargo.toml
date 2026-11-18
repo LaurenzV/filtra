@@ -8,3 +8,41 @@ license.workspace = true
 
 [dependencies]
 fearless_simd = { git = "https://github.com/LaurenzV/fearless_simd", rev = "9c349b2ddb91884e12e39271dd0c48ee1a164d22", default-features = false, features = ["std"] }
+
+[features]
+default = ["all"]
+all = [
+    "blend",
+    "color-matrix",
+    "component-transfer",
+    "composite",
+    "convolve-matrix",
+    "diffuse-lighting",
+    "displacement-map",
+    "drop-shadow",
+    "flood",
+    "gaussian-blur",
+    "merge",
+    "morphology",
+    "offset",
+    "specular-lighting",
+    "tile",
+    "turbulence",
+]
+css-functions = ["color-matrix", "component-transfer", "drop-shadow", "gaussian-blur"]
+blend = []
+color-matrix = []
+component-transfer = []
+composite = []
+convolve-matrix = []
+diffuse-lighting = []
+displacement-map = []
+drop-shadow = ["gaussian-blur", "color-matrix", "merge"]
+flood = []
+gaussian-blur = []
+merge = []
+morphology = []
+offset = []
+specular-lighting = []
+tile = []
+turbulence = []

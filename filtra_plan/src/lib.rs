@@ -13,7 +13,16 @@ mod planner;
 mod rect;
 
 pub use buffers::{Buffers, assign_buffers};
-pub use filtra_types::{BlendMode, ColorChannel, CompositeOperator, EdgeMode, MorphologyOperator};
+#[cfg(feature = "blend")]
+pub use filtra_types::BlendMode;
+#[cfg(feature = "displacement-map")]
+pub use filtra_types::ColorChannel;
+#[cfg(feature = "composite")]
+pub use filtra_types::CompositeOperator;
+#[cfg(feature = "convolve-matrix")]
+pub use filtra_types::EdgeMode;
+#[cfg(feature = "morphology")]
+pub use filtra_types::MorphologyOperator;
 pub use planner::plan;
 pub use rect::IntRect;
 
@@ -39,6 +48,7 @@ pub trait Pass {
 
 /// An operation that computes the result of a primitive.
 #[derive(Debug, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum Step {
     /// Copies the source image.
     SourceGraphic {
@@ -86,6 +96,7 @@ pub enum Step {
         /// The vertical offset.
         dy: i64,
     },
+    #[cfg(feature = "tile")]
     /// Repeats the `cell` part of an image.
     Tile {
         /// The source.
@@ -95,6 +106,7 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    #[cfg(feature = "composite")]
     /// Composites `src` onto `backdrop`.
     Composite {
         /// The source.
@@ -106,6 +118,7 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    #[cfg(feature = "blend")]
     /// Blends `src` into `backdrop`.
     Blend {
         /// The source.
@@ -119,6 +132,7 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    #[cfg(feature = "merge")]
     /// Stacks images with source over, the first one at the bottom.
     Merge {
         /// The sources.
@@ -126,6 +140,7 @@ pub enum Step {
         /// The destination.
         dst: ImageId,
     },
+    #[cfg(feature = "morphology")]
     /// Sets each pixel to the component-wise minimum or maximum of an image over the
     /// `2 rx + 1` by `2 ry + 1` pixels centered on it.
     Morphology {
@@ -140,6 +155,7 @@ pub enum Step {
         /// The vertical radius in pixels.
         ry: u32,
     },
+    #[cfg(feature = "displacement-map")]
     /// Moves the pixels of `src` by the channels of `map`.
     DisplacementMap {
         /// The source.
@@ -153,6 +169,7 @@ pub enum Step {
         /// The channels of `map` moving pixels along x and y.
         channels: [ColorChannel; 2],
     },
+    #[cfg(feature = "turbulence")]
     /// Fills with Perlin turbulence.
     Turbulence {
         /// The destination.
@@ -170,6 +187,7 @@ pub enum Step {
         /// The position of the noise's origin in pixels.
         origin: [f32; 2],
     },
+    #[cfg(feature = "color-matrix")]
     /// Transforms the unpremultiplied colors of an image with a matrix.
     ColorMatrix {
         /// The source.
@@ -179,6 +197,7 @@ pub enum Step {
         /// A 4×5 matrix in row-major order, applied to `[R, G, B, A, 1]`.
         matrix: [f32; 20],
     },
+    #[cfg(feature = "component-transfer")]
     /// Remaps the unpremultiplied channels of an image with a function per channel.
     ComponentTransfer {
         /// The source.
@@ -189,6 +208,7 @@ pub enum Step {
         /// equal regions of `[0, 1]`.
         functions: [Vec<[f32; 2]>; 4],
     },
+    #[cfg(feature = "convolve-matrix")]
     /// Sets each pixel to the sum of the pixels of `src` around it, weighted by a matrix.
     ConvolveMatrix {
         /// The source.
@@ -208,6 +228,7 @@ pub enum Step {
         /// Whether only the unpremultiplied colors are convolved, keeping alpha.
         preserve_alpha: bool,
     },
+    #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
     /// Lights the alpha of `src` as a height map, sampled at the top-left corner of each pixel.
     Lighting {
         /// The source.
@@ -227,6 +248,7 @@ pub enum Step {
         /// The position of the user-space origin in pixels.
         origin: [f32; 2],
     },
+    #[cfg(feature = "gaussian-blur")]
     /// Blurs an image with a Gaussian, treating it as transparent beyond its edges.
     GaussianBlur {
         /// The source.
@@ -244,22 +266,32 @@ impl Pass for Step {
             Self::SourceGraphic { .. }
             | Self::SourceAlpha { .. }
             | Self::Flood { .. }
-            | Self::Image { .. }
-            | Self::Turbulence { .. } => ([None, None], &[]),
-            Self::Convert { src, .. }
-            | Self::Offset { src, .. }
-            | Self::Tile { src, .. }
-            | Self::Morphology { src, .. }
-            | Self::ColorMatrix { src, .. }
-            | Self::ComponentTransfer { src, .. }
-            | Self::ConvolveMatrix { src, .. }
-            | Self::Lighting { src, .. }
-            | Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
-            Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
-                ([Some(*src), Some(*backdrop)], &[])
-            }
-            Self::DisplacementMap { src, map, .. } => ([Some(*src), Some(*map)], &[]),
+            | Self::Image { .. } => ([None, None], &[]),
+            Self::Convert { src, .. } | Self::Offset { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(feature = "tile")]
+            Self::Tile { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(feature = "composite")]
+            Self::Composite { src, backdrop, .. } => ([Some(*src), Some(*backdrop)], &[]),
+            #[cfg(feature = "blend")]
+            Self::Blend { src, backdrop, .. } => ([Some(*src), Some(*backdrop)], &[]),
+            #[cfg(feature = "merge")]
             Self::Merge { srcs, .. } => ([None, None], srcs),
+            #[cfg(feature = "morphology")]
+            Self::Morphology { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(feature = "displacement-map")]
+            Self::DisplacementMap { src, map, .. } => ([Some(*src), Some(*map)], &[]),
+            #[cfg(feature = "turbulence")]
+            Self::Turbulence { .. } => ([None, None], &[]),
+            #[cfg(feature = "color-matrix")]
+            Self::ColorMatrix { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(feature = "component-transfer")]
+            Self::ComponentTransfer { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(feature = "convolve-matrix")]
+            Self::ConvolveMatrix { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+            Self::Lighting { src, .. } => ([Some(*src), None], &[]),
+            #[cfg(feature = "gaussian-blur")]
+            Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
         };
 
         fixed.into_iter().flatten().chain(rest.iter().copied())
@@ -272,19 +304,31 @@ impl Pass for Step {
             | Self::Convert { dst, .. }
             | Self::Flood { dst, .. }
             | Self::Image { dst, .. }
-            | Self::Offset { dst, .. }
-            | Self::Tile { dst, .. }
-            | Self::Composite { dst, .. }
-            | Self::Blend { dst, .. }
-            | Self::Merge { dst, .. }
-            | Self::Morphology { dst, .. }
-            | Self::DisplacementMap { dst, .. }
-            | Self::Turbulence { dst, .. }
-            | Self::ColorMatrix { dst, .. }
-            | Self::ComponentTransfer { dst, .. }
-            | Self::ConvolveMatrix { dst, .. }
-            | Self::Lighting { dst, .. }
-            | Self::GaussianBlur { dst, .. } => *dst,
+            | Self::Offset { dst, .. } => *dst,
+            #[cfg(feature = "tile")]
+            Self::Tile { dst, .. } => *dst,
+            #[cfg(feature = "composite")]
+            Self::Composite { dst, .. } => *dst,
+            #[cfg(feature = "blend")]
+            Self::Blend { dst, .. } => *dst,
+            #[cfg(feature = "merge")]
+            Self::Merge { dst, .. } => *dst,
+            #[cfg(feature = "morphology")]
+            Self::Morphology { dst, .. } => *dst,
+            #[cfg(feature = "displacement-map")]
+            Self::DisplacementMap { dst, .. } => *dst,
+            #[cfg(feature = "turbulence")]
+            Self::Turbulence { dst, .. } => *dst,
+            #[cfg(feature = "color-matrix")]
+            Self::ColorMatrix { dst, .. } => *dst,
+            #[cfg(feature = "component-transfer")]
+            Self::ComponentTransfer { dst, .. } => *dst,
+            #[cfg(feature = "convolve-matrix")]
+            Self::ConvolveMatrix { dst, .. } => *dst,
+            #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+            Self::Lighting { dst, .. } => *dst,
+            #[cfg(feature = "gaussian-blur")]
+            Self::GaussianBlur { dst, .. } => *dst,
         }
     }
 }
@@ -302,6 +346,7 @@ pub enum ColorSpace {
     LinearRgb,
 }
 
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 /// The reflection model of [`Step::Lighting`].
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Reflection {
@@ -319,6 +364,7 @@ pub enum Reflection {
     },
 }
 
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 /// The light source of [`Step::Lighting`], in user space.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Light {
