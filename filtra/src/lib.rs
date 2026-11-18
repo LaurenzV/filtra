@@ -6,20 +6,19 @@
 
 mod cpu;
 
-pub use filtra_kernels::{IntRect, Pixmap};
+pub use filtra_kernels::{IntRect, Pixmap, PixmapMut};
 pub use filtra_plan::Transform;
 pub use filtra_types as types;
 
-/// Applies `filter` to `source`, whose pixels are placed in user space by `transform`.
-///
-/// The result has the size of `source`.
+/// Applies `filter` to `pixmap`, whose pixels are placed in user space by `transform`, and
+/// replaces its pixels with the result.
 pub fn apply<I>(
     filter: &types::Filter<I>,
-    source: &Pixmap,
+    mut pixmap: PixmapMut<'_>,
     transform: Transform,
     mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
-) -> Pixmap {
-    let bounds = source.bounds();
+) {
+    let bounds = pixmap.bounds();
     let bounds = filtra_plan::IntRect::new(bounds.x0, bounds.y0, bounds.x1, bounds.y1);
     let plan = filtra_plan::plan(filter, transform, bounds);
     let images: Vec<(&I, types::Rect)> = (filter.nodes().iter())
@@ -30,8 +29,8 @@ pub fn apply<I>(
         })
         .collect();
 
-    cpu::execute(&plan, source, &mut |image, rect, data| {
+    cpu::execute(&plan, &mut pixmap, &mut |image, rect, data| {
         let (image, subregion) = images[image];
         render_image(image, subregion, rect, data);
-    })
+    });
 }
