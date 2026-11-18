@@ -1,6 +1,6 @@
 use filtra_kernels::{
-    BlendMode, ColorChannel, ColorSpace, Convolution, EdgeMode, IntRect, MorphologyOperator,
-    Pixmap, PorterDuff, Source, Target,
+    BlendMode, ColorChannel, ColorSpace, Convolution, EdgeMode, IntRect, Light, Lighting,
+    MorphologyOperator, Pixmap, PorterDuff, Reflection, Source, Target,
 };
 use filtra_plan::{CompositeOperator, Plan, Step};
 
@@ -161,6 +161,47 @@ fn execute_step(step: &Step, images: &[Image], source: &Pixmap, buffers: &mut [P
                 preserve_alpha: *preserve_alpha,
             };
             filtra_kernels::convolve_matrix(read(buffers, image(*src)), output, &convolution);
+        }),
+        Step::Lighting {
+            src,
+            dst,
+            reflection,
+            surface_scale,
+            light,
+            color,
+            scale,
+            origin,
+        } => write(buffers, image(*dst), |buffers, output| {
+            let lighting = Lighting {
+                reflection: match *reflection {
+                    filtra_plan::Reflection::Diffuse { constant } => {
+                        Reflection::Diffuse { constant }
+                    }
+                    filtra_plan::Reflection::Specular { constant, exponent } => {
+                        Reflection::Specular { constant, exponent }
+                    }
+                },
+                surface_scale: *surface_scale,
+                light: match *light {
+                    filtra_plan::Light::Distant { direction } => Light::Distant { direction },
+                    filtra_plan::Light::Point { position } => Light::Point { position },
+                    filtra_plan::Light::Spot {
+                        position,
+                        direction,
+                        exponent,
+                        cone,
+                    } => Light::Spot {
+                        position,
+                        direction,
+                        exponent,
+                        cone,
+                    },
+                },
+                color: *color,
+                scale: *scale,
+                origin: *origin,
+            };
+            filtra_kernels::lighting(read(buffers, image(*src)), output, &lighting);
         }),
         Step::GaussianBlur { src, dst, std_dev } => {
             write(buffers, image(*dst), |buffers, target| {

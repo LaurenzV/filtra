@@ -201,6 +201,25 @@ pub enum Step {
         /// Whether only the unpremultiplied colors are convolved, keeping alpha.
         preserve_alpha: bool,
     },
+    /// Lights the alpha of `src` as a height map, sampled at the top-left corner of each pixel.
+    Lighting {
+        /// The source.
+        src: ImageId,
+        /// The destination.
+        dst: ImageId,
+        /// The reflection model.
+        reflection: Reflection,
+        /// The height of the surface where alpha is 1, in user units.
+        surface_scale: f32,
+        /// The light source in user space.
+        light: Light,
+        /// The color of the light in the color space of the result.
+        color: [f32; 3],
+        /// The number of pixels per user unit along the x- and y-axis.
+        scale: [f32; 2],
+        /// The position of the user-space origin in pixels.
+        origin: [f32; 2],
+    },
     /// Blurs an image with a Gaussian, treating it as transparent beyond its edges.
     GaussianBlur {
         /// The source.
@@ -226,6 +245,7 @@ impl Pass for Step {
             | Self::ColorMatrix { src, .. }
             | Self::ComponentTransfer { src, .. }
             | Self::ConvolveMatrix { src, .. }
+            | Self::Lighting { src, .. }
             | Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
             Self::Composite { src, backdrop, .. } | Self::Blend { src, backdrop, .. } => {
                 ([Some(*src), Some(*backdrop)], &[])
@@ -254,6 +274,7 @@ impl Pass for Step {
             | Self::ColorMatrix { dst, .. }
             | Self::ComponentTransfer { dst, .. }
             | Self::ConvolveMatrix { dst, .. }
+            | Self::Lighting { dst, .. }
             | Self::GaussianBlur { dst, .. } => *dst,
         }
     }
@@ -270,6 +291,49 @@ pub enum ColorSpace {
     Srgb,
     /// Linear-light sRGB.
     LinearRgb,
+}
+
+/// The reflection model of [`Step::Lighting`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Reflection {
+    /// The diffuse term of the Phong model, which is opaque.
+    Diffuse {
+        /// The diffuse constant `kd`.
+        constant: f32,
+    },
+    /// The specular term of the Blinn-Phong model, whose alpha is its largest color.
+    Specular {
+        /// The specular constant `ks`.
+        constant: f32,
+        /// The specular exponent.
+        exponent: f32,
+    },
+}
+
+/// The light source of [`Step::Lighting`], in user space.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Light {
+    /// An infinitely distant light.
+    Distant {
+        /// The unit vector pointing to the light.
+        direction: [f32; 3],
+    },
+    /// A positional light.
+    Point {
+        /// The position.
+        position: [f32; 3],
+    },
+    /// A positional light projecting a cone.
+    Spot {
+        /// The position.
+        position: [f32; 3],
+        /// The unit vector the light points along, or zero if it points at itself.
+        direction: [f32; 3],
+        /// The exponent controlling how focused the light is.
+        exponent: f32,
+        /// The cosine of the cone's half-angle, if the light has a cone.
+        cone: Option<f32>,
+    },
 }
 
 /// A scale and translation that maps user space to pixels.

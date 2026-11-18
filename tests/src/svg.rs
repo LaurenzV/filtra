@@ -3,9 +3,10 @@
 
 use filtra::types::{
     Blend, BlendMode, Color, ColorChannel, ColorInterpolation, ColorMatrix, ComponentTransfer,
-    Composite, CompositeOperator, ConvolveMatrix, DisplacementMap, DropShadow, EdgeMode, Filter,
-    FilterFunction, Flood, GaussianBlur, Input, Merge, Morphology, MorphologyOperator, Node,
-    Offset, Primitive, Rect, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
+    Composite, CompositeOperator, ConvolveMatrix, DiffuseLighting, DisplacementMap, DistantLight,
+    DropShadow, EdgeMode, Filter, FilterFunction, Flood, GaussianBlur, Input, LightSource, Merge,
+    Morphology, MorphologyOperator, Node, Offset, PointLight, Primitive, Rect, SpecularLighting,
+    SpotLight, Subregion, Tile, TransferFunction, Turbulence, TurbulenceType,
 };
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
@@ -102,6 +103,25 @@ fn filter(element: XmlNode<'_, '_>) -> Filter {
                 Primitive::ConvolveMatrix(convolve_matrix(child)),
                 vec![input("in")],
             ),
+            "feDiffuseLighting" => {
+                let mut diffuse = DiffuseLighting::new(light_source(child));
+                diffuse.surface_scale = number_or(child, "surfaceScale", 1.0);
+                diffuse.diffuse_constant = number_or(child, "diffuseConstant", 1.0);
+                diffuse.lighting_color = child
+                    .attribute("lighting-color")
+                    .map_or(Color::WHITE, color);
+                (Primitive::DiffuseLighting(diffuse), vec![input("in")])
+            }
+            "feSpecularLighting" => {
+                let mut specular = SpecularLighting::new(light_source(child));
+                specular.surface_scale = number_or(child, "surfaceScale", 1.0);
+                specular.specular_constant = number_or(child, "specularConstant", 1.0);
+                specular.specular_exponent = number_or(child, "specularExponent", 1.0);
+                specular.lighting_color = child
+                    .attribute("lighting-color")
+                    .map_or(Color::WHITE, color);
+                (Primitive::SpecularLighting(specular), vec![input("in")])
+            }
             "feDropShadow" => {
                 let (std_dev_x, std_dev_y) = std_deviation(child, 2.0);
                 let shadow = DropShadow {
@@ -394,6 +414,37 @@ fn convolve_matrix(node: XmlNode<'_, '_>) -> ConvolveMatrix {
         edge_mode,
         kernel_unit_length: None,
         preserve_alpha: node.attribute("preserveAlpha") == Some("true"),
+    }
+}
+
+fn light_source(node: XmlNode<'_, '_>) -> LightSource {
+    let light = node
+        .children()
+        .find(XmlNode::is_element)
+        .unwrap_or_else(|| panic!("<{}> has no light source", node.tag_name().name()));
+    let number = |name| number_or(light, name, 0.0);
+
+    match light.tag_name().name() {
+        "feDistantLight" => LightSource::Distant(DistantLight {
+            azimuth: number("azimuth"),
+            elevation: number("elevation"),
+        }),
+        "fePointLight" => LightSource::Point(PointLight {
+            x: number("x"),
+            y: number("y"),
+            z: number("z"),
+        }),
+        "feSpotLight" => LightSource::Spot(SpotLight {
+            x: number("x"),
+            y: number("y"),
+            z: number("z"),
+            points_at_x: number("pointsAtX"),
+            points_at_y: number("pointsAtY"),
+            points_at_z: number("pointsAtZ"),
+            specular_exponent: number_or(light, "specularExponent", 1.0),
+            limiting_cone_angle: optional_number(light, "limitingConeAngle"),
+        }),
+        other => panic!("unsupported light source <{other}>"),
     }
 }
 

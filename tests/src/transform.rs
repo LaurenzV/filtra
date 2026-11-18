@@ -23,6 +23,16 @@ fn drop_shadow() {
 }
 
 #[test]
+fn lighting() {
+    check_at("transform/lighting", 2);
+}
+
+#[test]
+fn lighting_spot() {
+    check_at("transform/lighting_spot", 2);
+}
+
+#[test]
 fn morphology() {
     check_at("transform/morphology", 2);
 }

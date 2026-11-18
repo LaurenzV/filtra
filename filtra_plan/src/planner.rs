@@ -1,9 +1,9 @@
 use filtra_types::{
-    ColorInterpolation, ColorMatrix, ConvolveMatrix, Filter, Input, Node, Primitive, Rect,
-    TransferFunction, TurbulenceType,
+    Color, ColorInterpolation, ColorMatrix, ConvolveMatrix, Filter, Input, LightSource, Node,
+    Primitive, Rect, TransferFunction, TurbulenceType,
 };
 
-use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
+use crate::{ColorSpace, ImageId, IntRect, Light, Plan, Reflection, Step, Transform};
 
 /// Plans `filter` for a source image covering `bounds`.
 pub fn plan(filter: &Filter, transform: Transform, bounds: IntRect) -> Plan {
@@ -110,11 +110,20 @@ impl<'a> Planner<'a> {
             _ => interpolation,
         };
         let map = matches!(node.primitive, Primitive::DisplacementMap(_)).then_some(1);
+        // Lighting only reads alpha (§9.10, §9.19), which no color space changes.
+        let alpha_only = matches!(
+            node.primitive,
+            Primitive::DiffuseLighting(_) | Primitive::SpecularLighting(_)
+        );
 
         let inputs: Vec<ImageId> = (slots.iter().enumerate())
             .map(|(i, &slot)| {
-                let space = if Some(i) == map { interpolation } else { space };
-                self.convert(slot, space)
+                if alpha_only {
+                    self.outputs[slot].unwrap().image
+                } else {
+                    let space = if Some(i) == map { interpolation } else { space };
+                    self.convert(slot, space)
+                }
             })
             .collect();
         let dst = self.image(subregion.intersect(&self.region));
@@ -218,6 +227,32 @@ impl<'a> Planner<'a> {
                 dst,
                 std_dev: std_dev([blur.std_dev_x, blur.std_dev_y], self.transform),
             },
+            // TODO: `kernelUnitLength`, which is deprecated (§9.10, §9.19).
+            (Primitive::DiffuseLighting(diffuse), &[src]) => Step::Lighting {
+                src,
+                dst,
+                reflection: Reflection::Diffuse {
+                    constant: diffuse.diffuse_constant,
+                },
+                surface_scale: diffuse.surface_scale,
+                light: light(diffuse.light_source),
+                color: color_in(diffuse.lighting_color, space),
+                scale: [self.transform.sx, self.transform.sy],
+                origin: [self.transform.tx, self.transform.ty],
+            },
+            (Primitive::SpecularLighting(specular), &[src]) => Step::Lighting {
+                src,
+                dst,
+                reflection: Reflection::Specular {
+                    constant: specular.specular_constant,
+                    exponent: specular.specular_exponent,
+                },
+                surface_scale: specular.surface_scale,
+                light: light(specular.light_source),
+                color: color_in(specular.lighting_color, space),
+                scale: [self.transform.sx, self.transform.sy],
+                origin: [self.transform.tx, self.transform.ty],
+            },
             (Primitive::ConvolveMatrix(convolution), &[src]) => {
                 match convolve_matrix(convolution) {
                     Some((size, weights, target)) => Step::ConvolveMatrix {
@@ -245,10 +280,7 @@ impl<'a> Planner<'a> {
                 let colored = self.image(source_rect);
                 let shifted = self.image(self.rects[dst.0]);
                 let color = shadow.color.with_opacity(shadow.opacity);
-                let [r, g, b] = [color.r, color.g, color.b].map(|c| match space {
-                    ColorSpace::Srgb => c.clamp(0.0, 1.0),
-                    ColorSpace::LinearRgb => srgb_to_linear(c.clamp(0.0, 1.0)),
-                });
+                let [r, g, b] = color_in(color, space);
                 #[rustfmt::skip]
                 let matrix = [
                     0.0, 0.0, 0.0, 0.0, r,
@@ -424,6 +456,54 @@ fn offset_source(rect: IntRect, dx: i64, dy: i64) -> IntRect {
         back(rect.x1, dx),
         back(rect.y1, dy),
     )
+}
+
+fn light(source: LightSource) -> Light {
+    match source {
+        LightSource::Distant(light) => {
+            let (azimuth, elevation) = (light.azimuth.to_radians(), light.elevation.to_radians());
+
+            Light::Distant {
+                direction: [
+                    azimuth.cos() * elevation.cos(),
+                    azimuth.sin() * elevation.cos(),
+                    elevation.sin(),
+                ],
+            }
+        }
+        LightSource::Point(light) => Light::Point {
+            position: [light.x, light.y, light.z],
+        },
+        LightSource::Spot(light) => {
+            let axis = [
+                light.points_at_x - light.x,
+                light.points_at_y - light.y,
+                light.points_at_z - light.z,
+            ];
+            let length = axis.iter().map(|v| v * v).sum::<f32>().sqrt();
+
+            Light::Spot {
+                position: [light.x, light.y, light.z],
+                // A light pointing at itself has no direction and lights nothing.
+                direction: if length == 0.0 {
+                    [0.0; 3]
+                } else {
+                    axis.map(|v| v / length)
+                },
+                exponent: light.specular_exponent,
+                cone: light
+                    .limiting_cone_angle
+                    .map(|angle| angle.to_radians().cos()),
+            }
+        }
+    }
+}
+
+fn color_in(color: Color, space: ColorSpace) -> [f32; 3] {
+    [color.r, color.g, color.b].map(|c| match space {
+        ColorSpace::Srgb => c.clamp(0.0, 1.0),
+        ColorSpace::LinearRgb => srgb_to_linear(c.clamp(0.0, 1.0)),
+    })
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
