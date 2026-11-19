@@ -26,6 +26,7 @@ pub fn plan<I>(filter: &Filter<I>, transform: Transform, bounds: IntRect) -> Pla
     let output = planner.plan_output();
 
     Plan {
+        source: planner.outputs[filter.nodes().len()].map(|source| source.image),
         steps: planner.steps,
         rects: planner.rects,
         output,
@@ -386,16 +387,20 @@ impl<'a, I> Planner<'a, I> {
     }
 
     fn plan_input(&mut self, input: Input) -> usize {
-        let (slot, step): (usize, fn(ImageId) -> Step) = match input {
+        let slot = match input {
             Input::Result(index) => return index,
-            Input::SourceGraphic => (self.nodes.len(), |dst| Step::SourceGraphic { dst }),
-            Input::SourceAlpha => (self.nodes.len() + 1, |dst| Step::SourceAlpha { dst }),
+            Input::SourceGraphic => self.nodes.len(),
+            Input::SourceAlpha => self.nodes.len() + 1,
         };
 
         if self.outputs[slot].is_none() {
             let dst = self.image(self.region);
 
-            self.steps.push(step(dst));
+            if input == Input::SourceAlpha {
+                let source = self.plan_input(Input::SourceGraphic);
+                let src = self.outputs[source].unwrap().image;
+                self.steps.push(Step::Alpha { src, dst });
+            }
 
             self.outputs[slot] = Some(Output {
                 image: dst,
@@ -686,8 +691,7 @@ mod tests {
         ));
 
         let plan = plan(&filter, IDENTITY, BOUNDS);
-        let source_graphic = single(&plan, |step| matches!(step, Step::SourceGraphic { .. }));
-        let source_alpha = single(&plan, |step| matches!(step, Step::SourceAlpha { .. }));
+        let source_alpha = single(&plan, |step| matches!(step, Step::Alpha { .. }));
         let flooded = single(&plan, |step| matches!(step, Step::Flood { .. }));
 
         let Step::Offset {
@@ -696,7 +700,8 @@ mod tests {
         else {
             unreachable!()
         };
-        assert_eq!(src, source_graphic.writes());
+        assert_eq!(Some(src), plan.source);
+        assert!(source_alpha.reads().eq(plan.source));
 
         let Step::Composite {
             src,
@@ -729,7 +734,7 @@ mod tests {
             !plan
                 .steps
                 .iter()
-                .any(|step| matches!(step, Step::Flood { .. } | Step::SourceAlpha { .. }))
+                .any(|step| matches!(step, Step::Flood { .. } | Step::Alpha { .. }))
         );
     }
 

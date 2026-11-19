@@ -2,12 +2,13 @@ use crate::{ImageId, IntRect, Pass};
 
 /// Assigns the images of `passes`, which cover `rects`, to as few buffers as possible.
 ///
-/// Each image must be written by exactly one pass before any pass reads it.
+/// Images that no pass writes, like [`Plan::source`](crate::Plan::source), get no buffer.
 pub fn assign_buffers<P: Pass>(passes: &[P], rects: &[IntRect], output: ImageId) -> Buffers {
     // The reads of all passes, each pass's ending at its entry in `ends`.
     let mut reads = Vec::new();
     let mut ends = Vec::with_capacity(passes.len());
     let mut last_reads: Vec<Option<usize>> = vec![None; rects.len()];
+    let mut written = vec![false; rects.len()];
 
     for (index, pass) in passes.iter().enumerate() {
         let start = reads.len();
@@ -17,6 +18,10 @@ pub fn assign_buffers<P: Pass>(passes: &[P], rects: &[IntRect], output: ImageId)
         for read in &reads[start..] {
             last_reads[read.0] = Some(index);
         }
+
+        let dst = pass.writes();
+        assert!(!written[dst.0], "{dst:?} is written twice");
+        written[dst.0] = true;
     }
 
     last_reads[output.0] = Some(usize::MAX);
@@ -31,12 +36,10 @@ pub fn assign_buffers<P: Pass>(passes: &[P], rects: &[IntRect], output: ImageId)
 
         for read in reads {
             assert!(
-                assigned[read.0].is_some(),
+                assigned[read.0].is_some() || !written[read.0],
                 "{read:?} is read before it's written"
             );
         }
-
-        assert!(assigned[dst.0].is_none(), "{dst:?} is written twice");
 
         assigned[dst.0] = Some(pool.allocate(rects[dst.0]));
 
@@ -44,21 +47,19 @@ pub fn assign_buffers<P: Pass>(passes: &[P], rects: &[IntRect], output: ImageId)
         // being freed twice.
         for &read in reads {
             if last_reads[read.0] == Some(index) {
-                pool.free.push(assigned[read.0].unwrap());
+                pool.free.extend(assigned[read.0]);
                 last_reads[read.0] = None;
             }
         }
 
         if last_reads[dst.0].is_none() {
-            pool.free.push(assigned[dst.0].unwrap());
+            pool.free.extend(assigned[dst.0]);
         }
     }
 
     Buffers {
         count: pool.sizes.len(),
-        images: (assigned.into_iter())
-            .map(|buffer| buffer.expect("every image is written"))
-            .collect(),
+        images: assigned,
     }
 }
 
@@ -67,8 +68,8 @@ pub fn assign_buffers<P: Pass>(passes: &[P], rects: &[IntRect], output: ImageId)
 pub struct Buffers {
     /// The number of buffers.
     pub count: usize,
-    /// The buffer of each image, indexed by [`ImageId`].
-    pub images: Vec<usize>,
+    /// The buffer of each image that a pass writes, indexed by [`ImageId`].
+    pub images: Vec<Option<usize>>,
 }
 
 #[derive(Default)]
@@ -111,31 +112,18 @@ mod tests {
 
     #[test]
     fn reuses_buffers_along_a_chain() {
-        let mut passes = vec![Step::SourceGraphic { dst: ImageId(0) }];
-
-        for index in 1..=10 {
-            passes.push(Step::Offset {
-                src: ImageId(index - 1),
-                dst: ImageId(index),
-                dx: 1,
-                dy: 1,
-            });
-        }
+        let passes: Vec<Step> = (1..=10).map(|index| offset(index - 1, index)).collect();
 
         let buffers = checked_assign(&passes, &[RECT; 11], ImageId(10));
         assert_eq!(buffers.count, 2);
+        assert_eq!(buffers.images[0], None);
     }
 
     #[test]
     fn frees_images_read_twice_by_a_pass_once() {
-        let flood = |dst| Step::Flood {
-            dst: ImageId(dst),
-            color: [0; 4],
-        };
-
         // Images 2 and 3 are needed at the same time, so they can't share the buffer of image 0.
         let passes = [
-            Step::SourceGraphic { dst: ImageId(0) },
+            flood(0),
             merge(&[0, 0], 1),
             flood(2),
             flood(3),
@@ -147,15 +135,24 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "is read before it's written")]
-    fn rejects_reading_unwritten_images() {
-        let passes = [Step::Offset {
-            src: ImageId(1),
-            dst: ImageId(0),
-            dx: 0,
-            dy: 0,
-        }];
+    fn rejects_reading_images_written_later() {
+        assign_buffers(&[offset(1, 0), flood(1)], &[RECT; 2], ImageId(0));
+    }
 
-        assign_buffers(&passes, &[RECT; 2], ImageId(0));
+    fn flood(dst: usize) -> Step {
+        Step::Flood {
+            dst: ImageId(dst),
+            color: [0; 4],
+        }
+    }
+
+    fn offset(src: usize, dst: usize) -> Step {
+        Step::Offset {
+            src: ImageId(src),
+            dst: ImageId(dst),
+            dx: 1,
+            dy: 1,
+        }
     }
 
     fn merge(srcs: &[usize], dst: usize) -> Step {
@@ -171,21 +168,19 @@ mod tests {
 
         for pass in passes {
             let reads: Vec<ImageId> = pass.reads().collect();
-            let dst = buffers.images[pass.writes().0];
+            let dst = buffers.images[pass.writes().0].unwrap();
 
             for &read in &reads {
-                assert_eq!(held[buffers.images[read.0]], Some(read), "{pass:?}");
+                if let Some(buffer) = buffers.images[read.0] {
+                    assert_eq!(held[buffer], Some(read), "{pass:?}");
+                    assert_ne!(buffer, dst, "{pass:?}");
+                }
             }
-
-            assert!(
-                reads.iter().all(|&read| buffers.images[read.0] != dst),
-                "{pass:?}"
-            );
 
             held[dst] = Some(pass.writes());
         }
 
-        assert_eq!(held[buffers.images[output.0]], Some(output));
+        assert_eq!(held[buffers.images[output.0].unwrap()], Some(output));
 
         buffers
     }
