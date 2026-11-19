@@ -6,7 +6,7 @@ use filtra_kernels::ColorChannel;
 use filtra_kernels::MorphologyOperator;
 #[cfg(feature = "composite")]
 use filtra_kernels::PorterDuff;
-use filtra_kernels::{ColorSpace, IntRect, Pixmap, PixmapMut, Source, Target};
+use filtra_kernels::{ColorSpace, IntRect, PixmapMut, Source, Target};
 #[cfg(feature = "convolve-matrix")]
 use filtra_kernels::{Convolution, EdgeMode};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
@@ -24,7 +24,7 @@ pub(crate) fn execute(
     let images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
         .map(|(&rect, buffer)| Image { buffer, rect })
         .collect();
-    let mut buffers: Vec<Pixmap> = (0..assignment.count).map(|_| Pixmap::new(0, 0)).collect();
+    let mut buffers = vec![Vec::new(); assignment.count];
 
     let source = pixmap.source(0, 0);
     for step in &plan.steps {
@@ -32,13 +32,37 @@ pub(crate) fn execute(
     }
 
     let result = images[plan.output.0];
-    filtra_kernels::offset(read(&buffers, result), pixmap.target(0, 0), 0, 0);
+    let result = result.stored(&buffers[result.written_buffer()]);
+    filtra_kernels::offset(result, pixmap.target(0, 0), 0, 0);
 }
 
 #[derive(Clone, Copy)]
 struct Image {
-    buffer: usize,
+    /// The buffer whose start holds the image, or `None` for the source, which is read in place.
+    buffer: Option<usize>,
     rect: filtra_plan::IntRect,
+}
+
+impl Image {
+    fn len(self) -> usize {
+        self.rect.width() as usize * self.rect.height() as usize * 4
+    }
+
+    fn written_buffer(self) -> usize {
+        self.buffer.expect("a step writes the image")
+    }
+
+    fn stored(self, buffer: &[u8]) -> Source<'_> {
+        let rect = self.rect;
+
+        Source::new(
+            &buffer[..self.len()],
+            rect.width(),
+            rect.height(),
+            rect.x0,
+            rect.y0,
+        )
+    }
 }
 
 fn execute_step(
@@ -46,43 +70,39 @@ fn execute_step(
     images: &[Image],
     source: Source<'_>,
     render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
-    buffers: &mut [Pixmap],
+    buffers: &mut [Vec<u8>],
 ) {
     let image = |id: filtra_plan::ImageId| images[id.0];
 
     match step {
-        Step::SourceGraphic { dst } => write(buffers, image(*dst), |_, target| {
-            filtra_kernels::offset(source, target, 0, 0);
-        }),
         Step::SourceAlpha { dst } => write(buffers, image(*dst), |_, target| {
             filtra_kernels::alpha(source, target);
         }),
         Step::Convert { src, dst, from, to } => write(buffers, image(*dst), |buffers, target| {
             let (from, to) = (color_space(*from), color_space(*to));
-            filtra_kernels::convert(read(buffers, image(*src)), target, from, to);
+            filtra_kernels::convert(read(buffers, source, image(*src)), target, from, to);
         }),
         Step::Flood { dst, color } => write(buffers, image(*dst), |_, target| {
             filtra_kernels::flood(target, *color);
         }),
         Step::Image { dst, image: index } => {
             let dst = image(*dst);
-            let mut pixmap = buffer(buffers, dst);
-            pixmap.data_mut().fill(0);
 
-            if !dst.rect.is_empty() {
-                let rect = IntRect::new(dst.rect.x0, dst.rect.y0, dst.rect.x1, dst.rect.y1);
-                render_image(*index, rect, pixmap.data_mut());
-            }
+            write_data(buffers, dst, |_, data| {
+                data.fill(0);
 
-            buffers[dst.buffer] = pixmap;
+                if !dst.rect.is_empty() {
+                    render_image(*index, kernel_rect(dst.rect), data);
+                }
+            });
         }
         Step::Offset { src, dst, dx, dy } => write(buffers, image(*dst), |buffers, target| {
-            filtra_kernels::offset(read(buffers, image(*src)), target, *dx, *dy);
+            filtra_kernels::offset(read(buffers, source, image(*src)), target, *dx, *dy);
         }),
         #[cfg(feature = "tile")]
         Step::Tile { src, cell, dst } => write(buffers, image(*dst), |buffers, target| {
-            let cell = IntRect::new(cell.x0, cell.y0, cell.x1, cell.y1);
-            filtra_kernels::tile(read(buffers, image(*src)), cell, target);
+            let cell = kernel_rect(*cell);
+            filtra_kernels::tile(read(buffers, source, image(*src)), cell, target);
         }),
         #[cfg(feature = "composite")]
         Step::Composite {
@@ -91,8 +111,8 @@ fn execute_step(
             operator,
             dst,
         } => write(buffers, image(*dst), |buffers, target| {
-            let src = read(buffers, image(*src));
-            let backdrop = read(buffers, image(*backdrop));
+            let src = read(buffers, source, image(*src));
+            let backdrop = read(buffers, source, image(*backdrop));
             composite(src, backdrop, *operator, target);
         }),
         #[cfg(feature = "blend")]
@@ -103,13 +123,16 @@ fn execute_step(
             composite,
             dst,
         } => write(buffers, image(*dst), |buffers, target| {
-            let src = read(buffers, image(*src));
-            let backdrop = read(buffers, image(*backdrop));
+            let src = read(buffers, source, image(*src));
+            let backdrop = read(buffers, source, image(*backdrop));
             filtra_kernels::blend(src, backdrop, blend_mode(*mode), *composite, target);
         }),
         #[cfg(feature = "merge")]
         Step::Merge { srcs, dst } => write(buffers, image(*dst), |buffers, target| {
-            let srcs: Vec<Source<'_>> = srcs.iter().map(|src| read(buffers, image(*src))).collect();
+            let srcs: Vec<Source<'_>> = srcs
+                .iter()
+                .map(|src| read(buffers, source, image(*src)))
+                .collect();
             filtra_kernels::merge(&srcs, target);
         }),
         #[cfg(feature = "morphology")]
@@ -124,7 +147,13 @@ fn execute_step(
                 filtra_plan::MorphologyOperator::Erode => MorphologyOperator::Erode,
                 filtra_plan::MorphologyOperator::Dilate => MorphologyOperator::Dilate,
             };
-            filtra_kernels::morphology(read(buffers, image(*src)), target, operator, *rx, *ry);
+            filtra_kernels::morphology(
+                read(buffers, source, image(*src)),
+                target,
+                operator,
+                *rx,
+                *ry,
+            );
         }),
         #[cfg(feature = "displacement-map")]
         Step::DisplacementMap {
@@ -140,7 +169,10 @@ fn execute_step(
                 filtra_plan::ColorChannel::B => ColorChannel::B,
                 filtra_plan::ColorChannel::A => ColorChannel::A,
             });
-            let (src, map) = (read(buffers, image(*src)), read(buffers, image(*map)));
+            let (src, map) = (
+                read(buffers, source, image(*src)),
+                read(buffers, source, image(*map)),
+            );
             filtra_kernels::displacement_map(src, map, target, *scale, channels);
         }),
         #[cfg(feature = "turbulence")]
@@ -166,7 +198,7 @@ fn execute_step(
         }),
         #[cfg(feature = "color-matrix")]
         Step::ColorMatrix { src, dst, matrix } => write(buffers, image(*dst), |buffers, target| {
-            filtra_kernels::color_matrix(read(buffers, image(*src)), target, matrix);
+            filtra_kernels::color_matrix(read(buffers, source, image(*src)), target, matrix);
         }),
         #[cfg(feature = "component-transfer")]
         Step::ComponentTransfer {
@@ -175,7 +207,11 @@ fn execute_step(
             functions,
         } => write(buffers, image(*dst), |buffers, target| {
             let functions = functions.each_ref().map(Vec::as_slice);
-            filtra_kernels::component_transfer(read(buffers, image(*src)), target, functions);
+            filtra_kernels::component_transfer(
+                read(buffers, source, image(*src)),
+                target,
+                functions,
+            );
         }),
         #[cfg(feature = "convolve-matrix")]
         Step::ConvolveMatrix {
@@ -201,7 +237,11 @@ fn execute_step(
                 },
                 preserve_alpha: *preserve_alpha,
             };
-            filtra_kernels::convolve_matrix(read(buffers, image(*src)), output, &convolution);
+            filtra_kernels::convolve_matrix(
+                read(buffers, source, image(*src)),
+                output,
+                &convolution,
+            );
         }),
         #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
         Step::Lighting {
@@ -243,12 +283,12 @@ fn execute_step(
                 scale: *scale,
                 origin: *origin,
             };
-            filtra_kernels::lighting(read(buffers, image(*src)), output, &lighting);
+            filtra_kernels::lighting(read(buffers, source, image(*src)), output, &lighting);
         }),
         #[cfg(feature = "gaussian-blur")]
         Step::GaussianBlur { src, dst, std_dev } => {
             write(buffers, image(*dst), |buffers, target| {
-                filtra_kernels::gaussian_blur(read(buffers, image(*src)), target, *std_dev);
+                filtra_kernels::gaussian_blur(read(buffers, source, image(*src)), target, *std_dev);
             })
         }
         // A dependency can enable a primitive on `filtra_plan` without enabling it here.
@@ -256,22 +296,32 @@ fn execute_step(
     }
 }
 
-fn write(buffers: &mut [Pixmap], dst: Image, f: impl FnOnce(&[Pixmap], Target<'_>)) {
-    let mut pixmap = buffer(buffers, dst);
-    f(buffers, pixmap.target(dst.rect.x0, dst.rect.y0));
-    buffers[dst.buffer] = pixmap;
+fn write(buffers: &mut [Vec<u8>], dst: Image, f: impl FnOnce(&[Vec<u8>], Target<'_>)) {
+    write_data(buffers, dst, |buffers, data| {
+        let mut pixmap = PixmapMut::from_data(data, dst.rect.width(), dst.rect.height());
+        f(buffers, pixmap.target(dst.rect.x0, dst.rect.y0));
+    });
 }
 
-fn buffer(buffers: &mut [Pixmap], dst: Image) -> Pixmap {
-    let (width, height) = (dst.rect.width(), dst.rect.height());
-    let mut data = std::mem::replace(&mut buffers[dst.buffer], Pixmap::new(0, 0)).into_data();
-    data.resize(width as usize * height as usize * 4, 0);
-
-    Pixmap::from_data(data, width, height)
+fn write_data(buffers: &mut [Vec<u8>], dst: Image, f: impl FnOnce(&[Vec<u8>], &mut [u8])) {
+    let buffer = dst.written_buffer();
+    let mut data = std::mem::take(&mut buffers[buffer]);
+    if data.len() < dst.len() {
+        data = vec![0; dst.len()];
+    }
+    f(buffers, &mut data[..dst.len()]);
+    buffers[buffer] = data;
 }
 
-fn read(buffers: &[Pixmap], image: Image) -> Source<'_> {
-    buffers[image.buffer].source(image.rect.x0, image.rect.y0)
+fn read<'a>(buffers: &'a [Vec<u8>], source: Source<'a>, image: Image) -> Source<'a> {
+    match image.buffer {
+        Some(buffer) => image.stored(&buffers[buffer]),
+        None => source.clip(kernel_rect(image.rect)),
+    }
+}
+
+fn kernel_rect(rect: filtra_plan::IntRect) -> IntRect {
+    IntRect::new(rect.x0, rect.y0, rect.x1, rect.y1)
 }
 
 #[cfg(feature = "blend")]

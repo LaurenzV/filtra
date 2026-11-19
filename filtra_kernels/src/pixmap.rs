@@ -158,15 +158,23 @@ fn stride(width: u32) -> usize {
 #[derive(Debug, Clone, Copy)]
 pub struct Source<'a> {
     data: &'a [u8],
-    width: u32,
+    stride: usize,
+    /// The pixel that `data` starts with.
+    origin: (i32, i32),
     rect: IntRect,
 }
 
 impl<'a> Source<'a> {
-    fn new(data: &'a [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
+    /// Places premultiplied RGBA8 data with its top-left pixel at `(x, y)`.
+    ///
+    /// Panics if its length doesn't match.
+    pub fn new(data: &'a [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
+        check_len(data.len(), width, height);
+
         Self {
             data,
-            width,
+            stride: stride(width),
+            origin: (x, y),
             rect: extent(x, y, width, height),
         }
     }
@@ -174,6 +182,14 @@ impl<'a> Source<'a> {
     /// The pixels the pixmap covers.
     pub fn rect(&self) -> IntRect {
         self.rect
+    }
+
+    /// The part of the pixmap within `rect`.
+    pub fn clip(self, rect: IntRect) -> Self {
+        Self {
+            rect: self.rect.intersect(&rect),
+            ..self
+        }
     }
 
     pub(crate) fn row(&self, y: i32, x0: i32, x1: i32) -> Option<&'a [u8]> {
@@ -186,24 +202,23 @@ impl<'a> Source<'a> {
             return None;
         }
 
-        let start = (y - self.rect.y0) as usize * stride(self.width);
-        let columns = (x0 - self.rect.x0) as usize * 4..(x1 - self.rect.x0) as usize * 4;
+        let start = (y - self.origin.1) as usize * self.stride;
+        let columns = (x0 - self.origin.0) as usize * 4..(x1 - self.origin.0) as usize * 4;
 
         Some(&self.data[start..][columns])
     }
 
     pub(crate) fn pixel(&self, x: i32, y: i32) -> Option<&'a [u8; 4]> {
-        let x = usize::try_from(i64::from(x) - i64::from(self.rect.x0)).ok()?;
-        let y = usize::try_from(i64::from(y) - i64::from(self.rect.y0)).ok()?;
-        let width = self.width as usize;
+        let covered =
+            (self.rect.x0..self.rect.x1).contains(&x) && (self.rect.y0..self.rect.y1).contains(&y);
 
-        if x >= width {
+        if !covered {
             return None;
         }
 
-        let index = y.checked_mul(width)?.checked_add(x)?;
+        let start = (y - self.origin.1) as usize * self.stride + (x - self.origin.0) as usize * 4;
 
-        self.data.as_chunks().0.get(index)
+        self.data[start..].first_chunk()
     }
 }
 
