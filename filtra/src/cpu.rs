@@ -1,3 +1,4 @@
+use crate::BufferPool;
 #[cfg(feature = "blend")]
 use filtra_kernels::BlendMode;
 #[cfg(feature = "displacement-map")]
@@ -18,6 +19,7 @@ use filtra_plan::{ImageId, Pass, Plan, Step};
 pub(crate) fn execute(
     plan: &Plan,
     pixmap: PixmapMut<'_>,
+    pool: &mut BufferPool,
     render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
 ) {
     let assignment = filtra_plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
@@ -42,7 +44,7 @@ pub(crate) fn execute(
     let mut store = Store {
         pixmap,
         images,
-        buffers: vec![Vec::new(); assignment.count],
+        buffers: pool.take(assignment.count),
     };
 
     for step in &plan.steps {
@@ -55,6 +57,8 @@ pub(crate) fn execute(
             filtra_kernels::offset(inputs.read(plan.output), target, 0, 0);
         });
     }
+
+    pool.keep(store.buffers);
 }
 
 #[derive(Clone, Copy)]

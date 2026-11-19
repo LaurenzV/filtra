@@ -97,24 +97,32 @@ fn render(document: &Document, scale: u32) -> filtra::Pixmap {
 
     if let Some(filter) = &document.filter {
         let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
-        filtra::apply(
-            filter,
-            pixmap.as_mut(),
-            transform,
-            |shapes, subregion, rect, data| {
-                // Like `<use>`, a referenced element is placed at the subregion's origin.
-                let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
-                    * scale_transform
-                    * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
-                let image = rasterize(shapes, rect.width(), rect.height(), placement);
+        POOL.with_borrow_mut(|pool| {
+            filtra::apply(
+                filter,
+                pixmap.as_mut(),
+                transform,
+                pool,
+                |shapes, subregion, rect, data| {
+                    // Like `<use>`, a referenced element is placed at the subregion's origin.
+                    let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
+                        * scale_transform
+                        * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
+                    let image = rasterize(shapes, rect.width(), rect.height(), placement);
 
-                // Drawing over `data` instead of replacing it shows if it isn't transparent.
-                draw_over(data, &image);
-            },
-        );
+                    // Drawing over `data` instead of replacing it shows if it isn't transparent.
+                    draw_over(data, &image);
+                },
+            );
+        });
     }
 
     pixmap
+}
+
+thread_local! {
+    // Shared between tests, so that they run on buffers that hold the images of other tests.
+    static POOL: std::cell::RefCell<filtra::BufferPool> = std::cell::RefCell::new(filtra::BufferPool::new(4));
 }
 
 fn draw_over(data: &mut [u8], image: &[u8]) {

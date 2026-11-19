@@ -4,18 +4,21 @@
 //! pixels of the source with [`filtra_plan`] and executes the plan with the kernels of
 //! [`filtra_kernels`] on premultiplied RGBA8 pixmaps.
 
+mod buffer_pool;
 mod cpu;
 
+pub use buffer_pool::BufferPool;
 pub use filtra_kernels::{IntRect, Pixmap, PixmapMut};
 pub use filtra_plan::Transform;
 pub use filtra_types as types;
 
 /// Applies `filter` to `pixmap`, whose pixels are placed in user space by `transform`, and
-/// replaces its pixels with the result.
+/// replaces its pixels with the result, using the memory of `pool` for intermediate images.
 pub fn apply<I>(
     filter: &types::Filter<I>,
     pixmap: PixmapMut<'_>,
     transform: Transform,
+    pool: &mut BufferPool,
     mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
 ) {
     let bounds = pixmap.bounds();
@@ -29,7 +32,7 @@ pub fn apply<I>(
         })
         .collect();
 
-    cpu::execute(&plan, pixmap, &mut |image, rect, data| {
+    cpu::execute(&plan, pixmap, pool, &mut |image, rect, data| {
         let (image, subregion) = images[image];
         render_image(image, subregion, rect, data);
     });
