@@ -226,7 +226,9 @@ impl<'a> Source<'a> {
 #[derive(Debug)]
 pub struct Target<'a> {
     data: &'a mut [u8],
-    width: u32,
+    stride: usize,
+    /// The pixel that `data` starts with.
+    origin: (i32, i32),
     rect: IntRect,
 }
 
@@ -234,7 +236,8 @@ impl<'a> Target<'a> {
     fn new(data: &'a mut [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
         Self {
             data,
-            width,
+            stride: stride(width),
+            origin: (x, y),
             rect: extent(x, y, width, height),
         }
     }
@@ -244,37 +247,46 @@ impl<'a> Target<'a> {
         self.rect
     }
 
-    pub(crate) fn rows_mut(&mut self) -> impl Iterator<Item = (i32, &mut [u8])> {
-        let rows = if self.rect.is_empty() {
-            0
-        } else {
-            self.rect.height() as usize
-        };
+    /// The part of the pixmap within `rect`.
+    pub fn clip(self, rect: IntRect) -> Self {
+        Self {
+            rect: self.rect.intersect(&rect),
+            ..self
+        }
+    }
 
-        let stride = stride(self.width);
+    pub(crate) fn rows_mut(&mut self) -> impl Iterator<Item = (i32, &mut [u8])> {
+        let (rows, start) = self.layout();
         let width = self.rect.width() as usize * 4;
 
-        self.data
-            .chunks_exact_mut(stride)
+        self.data[start..]
+            .chunks_mut(self.stride)
             .take(rows)
             .zip(self.rect.y0..)
             .map(move |(row, y)| (y, &mut row[..width]))
     }
 
     pub(crate) fn repeat_rows(&mut self, period: usize) {
-        let rows = if self.rect.is_empty() {
-            0
-        } else {
-            self.rect.height() as usize
-        };
-
-        let stride = stride(self.width);
+        let (rows, start) = self.layout();
         let width = self.rect.width() as usize * 4;
 
         for row in period..rows {
-            let start = (row - period) * stride;
-            self.data.copy_within(start..start + width, row * stride);
+            let from = start + (row - period) * self.stride;
+            self.data
+                .copy_within(from..from + width, start + row * self.stride);
         }
+    }
+
+    /// The number of rows and the index of the first byte of the covered pixels.
+    fn layout(&self) -> (usize, usize) {
+        if self.rect.is_empty() {
+            return (0, 0);
+        }
+
+        let start = (self.rect.y0 - self.origin.1) as usize * self.stride
+            + (self.rect.x0 - self.origin.0) as usize * 4;
+
+        (self.rect.height() as usize, start)
     }
 }
 

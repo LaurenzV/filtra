@@ -13,7 +13,7 @@ use filtra_kernels::{Convolution, EdgeMode};
 use filtra_kernels::{Light, Lighting, Reflection};
 #[cfg(feature = "composite")]
 use filtra_plan::CompositeOperator;
-use filtra_plan::{Plan, Step};
+use filtra_plan::{Pass, Plan, Step};
 
 pub(crate) fn execute(
     plan: &Plan,
@@ -24,16 +24,56 @@ pub(crate) fn execute(
     let images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
         .map(|(&rect, buffer)| Image { buffer, rect })
         .collect();
-    let mut buffers = vec![Vec::new(); assignment.count];
+    let mut buffers = Buffers {
+        data: vec![Vec::new(); assignment.count],
+        output: None,
+    };
+
+    // The step that writes the output can write it into the pixmap right away, unless it still
+    // reads the source there.
+    let (last, rest) = plan.steps.split_last().expect("a plan has steps");
+    let direct = !matches!(last, Step::SourceAlpha { .. } | Step::Image { .. })
+        && last.reads().all(|read| Some(read) != plan.source);
+    let steps = if direct { rest } else { &plan.steps };
 
     let source = pixmap.source(0, 0);
-    for step in &plan.steps {
+    for step in steps {
         execute_step(step, &images, source, render_image, &mut buffers);
     }
 
-    let result = images[plan.output.0];
-    let result = result.stored(&buffers[result.written_buffer()]);
-    filtra_kernels::offset(result, pixmap.target(0, 0), 0, 0);
+    let output = kernel_rect(images[plan.output.0].rect);
+    if direct {
+        clear_outside(pixmap, output);
+        let mut buffers = Buffers {
+            data: buffers.data,
+            output: Some(pixmap.target(0, 0).clip(output)),
+        };
+        let source = Source::new(&[], 0, 0, 0, 0);
+        execute_step(last, &images, source, render_image, &mut buffers);
+    } else {
+        let result = images[plan.output.0];
+        let result = result.stored(&buffers.data[result.written_buffer()]);
+        filtra_kernels::offset(result, pixmap.target(0, 0), 0, 0);
+    }
+}
+
+/// The step buffers, and the pixmap to write the output into in place of its buffer.
+struct Buffers<'a> {
+    data: Vec<Vec<u8>>,
+    output: Option<Target<'a>>,
+}
+
+fn clear_outside(pixmap: &mut PixmapMut<'_>, rect: IntRect) {
+    let bounds = pixmap.bounds();
+
+    for strip in [
+        IntRect::new(bounds.x0, bounds.y0, bounds.x1, rect.y0),
+        IntRect::new(bounds.x0, rect.y1, bounds.x1, bounds.y1),
+        IntRect::new(bounds.x0, rect.y0, rect.x0, rect.y1),
+        IntRect::new(rect.x1, rect.y0, bounds.x1, rect.y1),
+    ] {
+        filtra_kernels::flood(pixmap.target(0, 0).clip(strip), [0; 4]);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -70,7 +110,7 @@ fn execute_step(
     images: &[Image],
     source: Source<'_>,
     render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
-    buffers: &mut [Vec<u8>],
+    buffers: &mut Buffers<'_>,
 ) {
     let image = |id: filtra_plan::ImageId| images[id.0];
 
@@ -296,14 +336,20 @@ fn execute_step(
     }
 }
 
-fn write(buffers: &mut [Vec<u8>], dst: Image, f: impl FnOnce(&[Vec<u8>], Target<'_>)) {
+fn write(buffers: &mut Buffers<'_>, dst: Image, f: impl FnOnce(&[Vec<u8>], Target<'_>)) {
+    if let Some(output) = buffers.output.take() {
+        f(&buffers.data, output);
+        return;
+    }
+
     write_data(buffers, dst, |buffers, data| {
         let mut pixmap = PixmapMut::from_data(data, dst.rect.width(), dst.rect.height());
         f(buffers, pixmap.target(dst.rect.x0, dst.rect.y0));
     });
 }
 
-fn write_data(buffers: &mut [Vec<u8>], dst: Image, f: impl FnOnce(&[Vec<u8>], &mut [u8])) {
+fn write_data(buffers: &mut Buffers<'_>, dst: Image, f: impl FnOnce(&[Vec<u8>], &mut [u8])) {
+    let buffers = &mut buffers.data;
     let buffer = dst.written_buffer();
     let mut data = std::mem::take(&mut buffers[buffer]);
     if data.len() < dst.len() {
