@@ -33,7 +33,7 @@ pub struct Plan {
     pub steps: Vec<Step>,
     /// The pixels of each image, indexed by [`ImageId`].
     pub rects: Vec<IntRect>,
-    /// The image that is the source image clipped to its pixels, which no step writes.
+    /// The source image clipped to its pixels, which no step writes.
     pub source: Option<ImageId>,
     /// The result in sRGB.
     pub output: ImageId,
@@ -52,8 +52,10 @@ pub trait Pass {
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum Step {
-    /// Copies the alpha channel of the source image with black color.
-    SourceAlpha {
+    /// Copies the alpha channel of an image with black color.
+    Alpha {
+        /// The source.
+        src: ImageId,
         /// The destination.
         dst: ImageId,
     },
@@ -260,10 +262,10 @@ pub enum Step {
 impl Pass for Step {
     fn reads(&self) -> impl Iterator<Item = ImageId> {
         let (fixed, rest): ([Option<ImageId>; 2], &[ImageId]) = match self {
-            Self::SourceAlpha { .. } | Self::Flood { .. } | Self::Image { .. } => {
-                ([None, None], &[])
+            Self::Flood { .. } | Self::Image { .. } => ([None, None], &[]),
+            Self::Alpha { src, .. } | Self::Convert { src, .. } | Self::Offset { src, .. } => {
+                ([Some(*src), None], &[])
             }
-            Self::Convert { src, .. } | Self::Offset { src, .. } => ([Some(*src), None], &[]),
             #[cfg(feature = "tile")]
             Self::Tile { src, .. } => ([Some(*src), None], &[]),
             #[cfg(feature = "composite")]
@@ -295,7 +297,7 @@ impl Pass for Step {
 
     fn writes(&self) -> ImageId {
         match self {
-            Self::SourceAlpha { dst }
+            Self::Alpha { dst, .. }
             | Self::Convert { dst, .. }
             | Self::Flood { dst, .. }
             | Self::Image { dst, .. }

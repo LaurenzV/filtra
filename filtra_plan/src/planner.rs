@@ -397,7 +397,9 @@ impl<'a, I> Planner<'a, I> {
             let dst = self.image(self.region);
 
             if input == Input::SourceAlpha {
-                self.steps.push(Step::SourceAlpha { dst });
+                let source = self.plan_input(Input::SourceGraphic);
+                let src = self.outputs[source].unwrap().image;
+                self.steps.push(Step::Alpha { src, dst });
             }
 
             self.outputs[slot] = Some(Output {
@@ -689,7 +691,7 @@ mod tests {
         ));
 
         let plan = plan(&filter, IDENTITY, BOUNDS);
-        let source_alpha = single(&plan, |step| matches!(step, Step::SourceAlpha { .. }));
+        let source_alpha = single(&plan, |step| matches!(step, Step::Alpha { .. }));
         let flooded = single(&plan, |step| matches!(step, Step::Flood { .. }));
 
         let Step::Offset {
@@ -699,6 +701,7 @@ mod tests {
             unreachable!()
         };
         assert_eq!(Some(src), plan.source);
+        assert!(source_alpha.reads().eq(plan.source));
 
         let Step::Composite {
             src,
@@ -731,7 +734,7 @@ mod tests {
             !plan
                 .steps
                 .iter()
-                .any(|step| matches!(step, Step::Flood { .. } | Step::SourceAlpha { .. }))
+                .any(|step| matches!(step, Step::Flood { .. } | Step::Alpha { .. }))
         );
     }
 

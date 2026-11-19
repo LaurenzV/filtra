@@ -14,7 +14,7 @@ pub use filtra_types as types;
 /// replaces its pixels with the result.
 pub fn apply<I>(
     filter: &types::Filter<I>,
-    mut pixmap: PixmapMut<'_>,
+    pixmap: PixmapMut<'_>,
     transform: Transform,
     mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
 ) {
@@ -29,7 +29,7 @@ pub fn apply<I>(
         })
         .collect();
 
-    cpu::execute(&plan, &mut pixmap, &mut |image, rect, data| {
+    cpu::execute(&plan, pixmap, &mut |image, rect, data| {
         let (image, subregion) = images[image];
         render_image(image, subregion, rect, data);
     });

@@ -158,10 +158,7 @@ fn stride(width: u32) -> usize {
 #[derive(Debug, Clone, Copy)]
 pub struct Source<'a> {
     data: &'a [u8],
-    stride: usize,
-    /// The pixel that `data` starts with.
-    origin: (i32, i32),
-    rect: IntRect,
+    layout: Layout,
 }
 
 impl<'a> Source<'a> {
@@ -173,52 +170,45 @@ impl<'a> Source<'a> {
 
         Self {
             data,
-            stride: stride(width),
-            origin: (x, y),
-            rect: extent(x, y, width, height),
+            layout: Layout::new(width, height, x, y),
         }
     }
 
     /// The pixels the pixmap covers.
     pub fn rect(&self) -> IntRect {
-        self.rect
+        self.layout.rect
     }
 
     /// The part of the pixmap within `rect`.
     pub fn clip(self, rect: IntRect) -> Self {
         Self {
-            rect: self.rect.intersect(&rect),
+            layout: self.layout.clip(rect),
             ..self
         }
     }
 
     pub(crate) fn row(&self, y: i32, x0: i32, x1: i32) -> Option<&'a [u8]> {
-        let covered = (self.rect.y0..self.rect.y1).contains(&y)
-            && x0 >= self.rect.x0
-            && x1 <= self.rect.x1
-            && x0 < x1;
+        let rect = self.layout.rect;
+        let covered = (rect.y0..rect.y1).contains(&y) && x0 >= rect.x0 && x1 <= rect.x1 && x0 < x1;
 
         if !covered {
             return None;
         }
 
-        let start = (y - self.origin.1) as usize * self.stride;
-        let columns = (x0 - self.origin.0) as usize * 4..(x1 - self.origin.0) as usize * 4;
+        let start = self.layout.index(x0, y);
 
-        Some(&self.data[start..][columns])
+        Some(&self.data[start..start + (x1 - x0) as usize * 4])
     }
 
     pub(crate) fn pixel(&self, x: i32, y: i32) -> Option<&'a [u8; 4]> {
-        let covered =
-            (self.rect.x0..self.rect.x1).contains(&x) && (self.rect.y0..self.rect.y1).contains(&y);
+        let rect = self.layout.rect;
+        let covered = (rect.x0..rect.x1).contains(&x) && (rect.y0..rect.y1).contains(&y);
 
         if !covered {
             return None;
         }
 
-        let start = (y - self.origin.1) as usize * self.stride + (x - self.origin.0) as usize * 4;
-
-        self.data[start..].first_chunk()
+        self.data[self.layout.index(x, y)..].first_chunk()
     }
 }
 
@@ -226,67 +216,89 @@ impl<'a> Source<'a> {
 #[derive(Debug)]
 pub struct Target<'a> {
     data: &'a mut [u8],
-    stride: usize,
-    /// The pixel that `data` starts with.
-    origin: (i32, i32),
-    rect: IntRect,
+    layout: Layout,
 }
 
 impl<'a> Target<'a> {
     fn new(data: &'a mut [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
         Self {
             data,
+            layout: Layout::new(width, height, x, y),
+        }
+    }
+
+    /// The pixels the pixmap covers.
+    pub fn rect(&self) -> IntRect {
+        self.layout.rect
+    }
+
+    /// The part of the pixmap within `rect`.
+    pub fn clip(self, rect: IntRect) -> Self {
+        Self {
+            layout: self.layout.clip(rect),
+            ..self
+        }
+    }
+
+    pub(crate) fn rows_mut(&mut self) -> impl Iterator<Item = (i32, &mut [u8])> {
+        let (rows, start) = self.layout.rows();
+        let width = self.layout.rect.width() as usize * 4;
+
+        self.data[start..]
+            .chunks_mut(self.layout.stride)
+            .take(rows)
+            .zip(self.layout.rect.y0..)
+            .map(move |(row, y)| (y, &mut row[..width]))
+    }
+
+    pub(crate) fn repeat_rows(&mut self, period: usize) {
+        let (rows, start) = self.layout.rows();
+        let (width, stride) = (self.layout.rect.width() as usize * 4, self.layout.stride);
+
+        for row in period..rows {
+            let from = start + (row - period) * stride;
+            self.data
+                .copy_within(from..from + width, start + row * stride);
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct Layout {
+    stride: usize,
+    origin: (i32, i32),
+    rect: IntRect,
+}
+
+impl Layout {
+    fn new(width: u32, height: u32, x: i32, y: i32) -> Self {
+        Self {
             stride: stride(width),
             origin: (x, y),
             rect: extent(x, y, width, height),
         }
     }
 
-    /// The pixels the pixmap covers.
-    pub fn rect(&self) -> IntRect {
-        self.rect
-    }
-
-    /// The part of the pixmap within `rect`.
-    pub fn clip(self, rect: IntRect) -> Self {
+    fn clip(self, rect: IntRect) -> Self {
         Self {
             rect: self.rect.intersect(&rect),
             ..self
         }
     }
 
-    pub(crate) fn rows_mut(&mut self) -> impl Iterator<Item = (i32, &mut [u8])> {
-        let (rows, start) = self.layout();
-        let width = self.rect.width() as usize * 4;
-
-        self.data[start..]
-            .chunks_mut(self.stride)
-            .take(rows)
-            .zip(self.rect.y0..)
-            .map(move |(row, y)| (y, &mut row[..width]))
+    fn index(&self, x: i32, y: i32) -> usize {
+        (y - self.origin.1) as usize * self.stride + (x - self.origin.0) as usize * 4
     }
 
-    pub(crate) fn repeat_rows(&mut self, period: usize) {
-        let (rows, start) = self.layout();
-        let width = self.rect.width() as usize * 4;
-
-        for row in period..rows {
-            let from = start + (row - period) * self.stride;
-            self.data
-                .copy_within(from..from + width, start + row * self.stride);
-        }
-    }
-
-    /// The number of rows and the index of the first byte of the covered pixels.
-    fn layout(&self) -> (usize, usize) {
+    fn rows(&self) -> (usize, usize) {
         if self.rect.is_empty() {
             return (0, 0);
         }
 
-        let start = (self.rect.y0 - self.origin.1) as usize * self.stride
-            + (self.rect.x0 - self.origin.0) as usize * 4;
-
-        (self.rect.height() as usize, start)
+        (
+            self.rect.height() as usize,
+            self.index(self.rect.x0, self.rect.y0),
+        )
     }
 }
 
