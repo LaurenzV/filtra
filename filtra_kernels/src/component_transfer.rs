@@ -1,11 +1,12 @@
-use fearless_simd::{Level, Simd, dispatch, f32x8, i32x8, prelude::*};
+use fearless_simd::{Simd, f32x8, i32x8, prelude::*};
 
+use crate::dispatch::dispatch;
 use crate::simd::{for_each_pixel_chunk, pack, premultiply, unpack};
 use crate::{Source, Target};
 
 /// `feComponentTransfer`, with every function given as piecewise linear segments.
 pub fn component_transfer(src: Source<'_>, dst: Target<'_>, functions: [&[[f32; 2]]; 4]) {
-    dispatch!(Level::new(), simd => component_transfer_inner(simd, src, dst, functions));
+    dispatch!(simd => component_transfer_inner(simd, src, dst, functions));
 }
 
 #[inline(always)]

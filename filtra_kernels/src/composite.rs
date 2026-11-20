@@ -1,7 +1,8 @@
-use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u16x16};
+use fearless_simd::{Simd, prelude::*, u8x32, u16x16};
 use filtra_types::CompositeOperator;
 
 use crate::arithmetic::arithmetic;
+use crate::dispatch::dispatch;
 use crate::simd::{Wide, combine, div255, for_each_pixel_chunk};
 use crate::{Source, Target};
 
@@ -12,7 +13,7 @@ pub fn composite(
     dst: Target<'_>,
     operator: CompositeOperator,
 ) {
-    dispatch!(Level::new(), simd => composite_inner(simd, src, backdrop, dst, operator));
+    dispatch!(simd => composite_inner(simd, src, backdrop, dst, operator));
 }
 
 #[inline(always)]

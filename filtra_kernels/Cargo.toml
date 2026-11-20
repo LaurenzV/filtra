@@ -13,7 +13,7 @@ repository.workspace = true
 all-features = true
 
 [dependencies]
-fearless_simd = { git = "https://github.com/LaurenzV/fearless_simd", rev = "9c349b2ddb91884e12e39271dd0c48ee1a164d22", default-features = false, features = ["std"] }
+fearless_simd = { version = "1.2.0", default-features = false, features = ["std"] }
 filtra_types = { workspace = true }
 
 [features]

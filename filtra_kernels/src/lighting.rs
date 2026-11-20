@@ -1,5 +1,6 @@
-use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+use fearless_simd::{Simd, f32x8, prelude::*};
 
+use crate::dispatch::dispatch;
 use crate::simd::{for_each_chunk, pack, pow};
 use crate::{IntRect, Source, Target};
 
@@ -65,7 +66,7 @@ pub enum Light {
 
 /// `feDiffuseLighting` and `feSpecularLighting`.
 pub fn lighting(src: Source<'_>, dst: Target<'_>, lighting: &Lighting) {
-    dispatch!(Level::new(), simd => lighting_inner(simd, src, dst, lighting));
+    dispatch!(simd => lighting_inner(simd, src, dst, lighting));
 }
 
 #[inline(always)]

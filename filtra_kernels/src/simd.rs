@@ -217,11 +217,13 @@ fn exp2<S: Simd>(x: f32x8<S>) -> f32x8<S> {
 
 #[cfg(test)]
 mod tests {
-    use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+    use fearless_simd::{Simd, f32x8, prelude::*};
+
+    use crate::dispatch::dispatch;
 
     #[test]
     fn pow_matches_f64() {
-        dispatch!(Level::new(), simd => check_pow(simd));
+        dispatch!(simd => check_pow(simd));
     }
 
     fn check_pow<S: Simd>(simd: S) {

@@ -23,6 +23,7 @@ mod component_transfer;
 mod composite;
 #[cfg(feature = "convolve-matrix")]
 mod convolve_matrix;
+mod dispatch;
 #[cfg(feature = "displacement-map")]
 mod displacement_map;
 mod flood;
@@ -32,6 +33,8 @@ mod lighting;
 mod merge;
 #[cfg(feature = "morphology")]
 mod morphology;
+#[cfg(feature = "gaussian-blur")]
+mod mul_q15;
 mod offset;
 // Some of the shared helpers go unused when only some primitives are enabled.
 #[cfg_attr(not(feature = "all"), allow(dead_code, unused_imports))]

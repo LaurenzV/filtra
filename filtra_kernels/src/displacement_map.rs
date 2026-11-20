@@ -1,6 +1,7 @@
-use fearless_simd::{Level, Simd, dispatch, f32x8, i32x8, prelude::*};
+use fearless_simd::{Simd, f32x8, i32x8, prelude::*};
 use filtra_types::ColorChannel;
 
+use crate::dispatch::dispatch;
 use crate::pixmap::for_each_segment;
 use crate::simd::{for_each_chunk, unpack, unpremultiply};
 use crate::{Source, Target};
@@ -13,7 +14,7 @@ pub fn displacement_map(
     scale: [f32; 2],
     channels: [ColorChannel; 2],
 ) {
-    dispatch!(Level::new(), simd => displacement_map_inner(simd, src, map, dst, scale, channels));
+    dispatch!(simd => displacement_map_inner(simd, src, map, dst, scale, channels));
 }
 
 #[inline(always)]

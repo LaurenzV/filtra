@@ -1,7 +1,9 @@
 use core::ops::Range;
 
-use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u16x16, u32x8};
+use fearless_simd::{Simd, prelude::*, u8x32, u16x16, u32x8};
 
+use crate::dispatch::dispatch;
+use crate::mul_q15::MulQ15;
 use crate::simd::Wide;
 use crate::{IntRect, Source, Target};
 
@@ -13,7 +15,7 @@ pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
         return crate::offset(src, dst, [0, 0]);
     }
 
-    dispatch!(Level::new(), simd => blur(simd, src, dst, &axes));
+    dispatch!(simd => blur(simd, src, dst, &axes));
 }
 
 const CHUNK: usize = 8;
@@ -25,7 +27,7 @@ const MAX_TAPS: usize = 13;
 /// The fractional bits of a horizontal Gaussian, which leave room for the sum of two of them.
 const GAUSS_FRACTION: u32 = 6;
 
-fn blur<S: Simd>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) {
+fn blur<S: MulQ15>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) {
     // The blur is decimated: each axis is halved with [1, 3, 3, 1] / 8 until a variance of at most
     // 4 is left, that rest is a small Gaussian on the coarsest image, and the image is then doubled
     // back with [1, 3] / 4 interpolation. Halving and doubling each add a variance of 0.75 in the
@@ -338,7 +340,7 @@ impl Op<'_> {
     }
 }
 
-fn fill_plane<S: Simd>(simd: S, input: Input<'_>, ops: [Op<'_>; 2], plane: &mut Plane) {
+fn fill_plane<S: MulQ15>(simd: S, input: Input<'_>, ops: [Op<'_>; 2], plane: &mut Plane) {
     let mut pass = Pass::new(simd, input, ops, plane.x);
 
     for y in plane.y.0..plane.y.1 {
@@ -346,7 +348,7 @@ fn fill_plane<S: Simd>(simd: S, input: Input<'_>, ops: [Op<'_>; 2], plane: &mut 
     }
 }
 
-fn fill_target<S: Simd>(
+fn fill_target<S: MulQ15>(
     simd: S,
     input: Input<'_>,
     ops: [Op<'_>; 2],
@@ -373,7 +375,7 @@ fn fill_target<S: Simd>(
 }
 
 /// One pass: a horizontal step into 16-bit rows, then a vertical step that combines them.
-struct Pass<'a, S: Simd> {
+struct Pass<'a, S: MulQ15> {
     simd: S,
     input: Input<'a>,
     ops: [Op<'a>; 2],
@@ -396,7 +398,7 @@ struct Part {
     copy: Option<Vec<u8>>,
 }
 
-impl<'a, S: Simd> Pass<'a, S> {
+impl<'a, S: MulQ15> Pass<'a, S> {
     fn new(simd: S, input: Input<'a>, ops: [Op<'a>; 2], x: Span) -> Self {
         // Doubling makes two outputs, an even and an odd one, per input pixel.
         let (first, group) = match ops[0] {
@@ -565,7 +567,7 @@ impl<'a, S: Simd> Pass<'a, S> {
 /// The horizontal step for the chunks of `out` from column `first`, each an even and an odd
 /// [`Wide`] half.
 #[inline(always)]
-fn horizontal<S: Simd>(
+fn horizontal<S: MulQ15>(
     simd: S,
     op: Op<'_>,
     row: Option<(&[u8], i64)>,
@@ -673,7 +675,7 @@ fn horizontal<S: Simd>(
 /// The horizontal Gaussian of radius `R` for the chunks of `out`, from `row` starting `R` pixels
 /// before the first output.
 #[inline(always)]
-fn gauss_horizontal<S: Simd, const R: usize>(
+fn gauss_horizontal<S: MulQ15, const R: usize>(
     simd: S,
     weights: &[u16],
     row: &[u8],
@@ -711,7 +713,7 @@ fn gauss_horizontal<S: Simd, const R: usize>(
 /// The vertical step into the chunks of `out`, from horizontal results with `fraction` fractional
 /// bits.
 #[inline(always)]
-fn vertical<S: Simd>(
+fn vertical<S: MulQ15>(
     simd: S,
     op: Op<'_>,
     fraction: u32,
@@ -790,7 +792,7 @@ fn vertical<S: Simd>(
 
 /// The vertical Gaussian of radius `R` into the chunks of `out`, from the `2R + 1` rows around it.
 #[inline(always)]
-fn gauss_vertical<S: Simd, const R: usize>(
+fn gauss_vertical<S: MulQ15, const R: usize>(
     simd: S,
     weights: &[u16],
     fraction: u32,
@@ -840,8 +842,8 @@ fn fixed_weights(weights: &[u16]) -> [u16; MAX_TAPS / 2 + 1] {
 
 /// `v` times the Q15 `weight`, rounded.
 #[inline(always)]
-fn weighted<S: Simd>(simd: S, v: u16x16<S>, weight: u16) -> u16x16<S> {
-    simd.mul_q15_i16x16(v.bitcast(), simd.splat_i16x16(weight as i16))
+fn weighted<S: MulQ15>(simd: S, v: u16x16<S>, weight: u16) -> u16x16<S> {
+    simd.mul_q15(v.bitcast(), simd.splat_i16x16(weight as i16))
         .bitcast()
 }
 

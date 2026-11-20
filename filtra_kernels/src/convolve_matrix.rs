@@ -1,6 +1,7 @@
-use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+use fearless_simd::{Simd, f32x8, prelude::*};
 use filtra_types::EdgeMode;
 
+use crate::dispatch::dispatch;
 use crate::simd::{for_each_chunk, pack, premultiply, unpack, unpremultiply};
 use crate::{IntRect, Source, Target};
 
@@ -36,7 +37,7 @@ pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convoluti
         "the target is outside the weights"
     );
 
-    dispatch!(Level::new(), simd => convolve(simd, src, dst, convolution));
+    dispatch!(simd => convolve(simd, src, dst, convolution));
 }
 
 #[inline(always)]
