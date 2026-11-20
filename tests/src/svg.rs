@@ -82,78 +82,51 @@ fn filter(element: XmlNode<'_, '_>) -> Filter<Image> {
     let mut results = Vec::new();
 
     for child in element.children().filter(XmlNode::is_element) {
-        let input = |name| resolve_input(child, name, &results);
-        let (primitive, inputs) = match child.tag_name().name() {
-            "feBlend" => {
-                let blend = Blend {
-                    mode: blend_mode(child),
-                    no_composite: child.has_attribute("no-composite"),
-                };
-                (Primitive::Blend(blend), vec![input("in"), input("in2")])
-            }
-            "feColorMatrix" => (
-                Primitive::ColorMatrix(color_matrix(child)),
-                vec![input("in")],
-            ),
-            "feComponentTransfer" => {
-                let transfer = component_transfer(child);
-                (Primitive::ComponentTransfer(transfer), vec![input("in")])
-            }
-            "feComposite" => {
-                let composite = Composite {
-                    operator: composite_operator(child),
-                };
-                (
-                    Primitive::Composite(composite),
-                    vec![input("in"), input("in2")],
-                )
-            }
-            "feConvolveMatrix" => (
-                Primitive::ConvolveMatrix(convolve_matrix(child)),
-                vec![input("in")],
-            ),
+        let tag = child.tag_name().name();
+        let primitive = match tag {
+            "feBlend" => Primitive::Blend(Blend {
+                mode: blend_mode(child),
+                no_composite: child.has_attribute("no-composite"),
+            }),
+            "feColorMatrix" => Primitive::ColorMatrix(color_matrix(child)),
+            "feComponentTransfer" => Primitive::ComponentTransfer(component_transfer(child)),
+            "feComposite" => Primitive::Composite(Composite {
+                operator: composite_operator(child),
+            }),
+            "feConvolveMatrix" => Primitive::ConvolveMatrix(convolve_matrix(child)),
             "feDiffuseLighting" => {
                 let mut diffuse = DiffuseLighting::new(light_source(child));
                 diffuse.surface_scale = number_or(child, "surfaceScale", 1.0);
                 diffuse.diffuse_constant = number_or(child, "diffuseConstant", 1.0);
-                diffuse.lighting_color = child
-                    .attribute("lighting-color")
-                    .map_or(Color::WHITE, color);
-                (Primitive::DiffuseLighting(diffuse), vec![input("in")])
+                diffuse.lighting_color = color_or(child, "lighting-color", Color::WHITE);
+                Primitive::DiffuseLighting(diffuse)
             }
             "feSpecularLighting" => {
                 let mut specular = SpecularLighting::new(light_source(child));
                 specular.surface_scale = number_or(child, "surfaceScale", 1.0);
                 specular.specular_constant = number_or(child, "specularConstant", 1.0);
                 specular.specular_exponent = number_or(child, "specularExponent", 1.0);
-                specular.lighting_color = child
-                    .attribute("lighting-color")
-                    .map_or(Color::WHITE, color);
-                (Primitive::SpecularLighting(specular), vec![input("in")])
+                specular.lighting_color = color_or(child, "lighting-color", Color::WHITE);
+                Primitive::SpecularLighting(specular)
             }
             "feDropShadow" => {
-                let (std_dev_x, std_dev_y) = std_deviation(child, 2.0);
-                let shadow = DropShadow {
+                let (std_dev_x, std_dev_y) =
+                    number_pair(child, "stdDeviation").unwrap_or((2.0, 2.0));
+
+                Primitive::DropShadow(DropShadow {
                     dx: number_or(child, "dx", 2.0),
                     dy: number_or(child, "dy", 2.0),
                     std_dev_x,
                     std_dev_y,
-                    color: child.attribute("flood-color").map_or(Color::BLACK, color),
+                    color: color_or(child, "flood-color", Color::BLACK),
                     opacity: number_or(child, "flood-opacity", 1.0),
-                };
-                (Primitive::DropShadow(shadow), vec![input("in")])
+                })
             }
-            "feFlood" => {
-                let flood = Flood {
-                    color: child.attribute("flood-color").map_or(Color::BLACK, color),
-                    opacity: number_or(child, "flood-opacity", 1.0),
-                };
-                (Primitive::Flood(flood), vec![])
-            }
-            "feGaussianBlur" => (
-                Primitive::GaussianBlur(gaussian_blur(child)),
-                vec![input("in")],
-            ),
+            "feFlood" => Primitive::Flood(Flood {
+                color: color_or(child, "flood-color", Color::BLACK),
+                opacity: number_or(child, "flood-opacity", 1.0),
+            }),
+            "feGaussianBlur" => Primitive::GaussianBlur(gaussian_blur(child)),
             "feImage" => {
                 let id = attribute(child, "href")
                     .strip_prefix('#')
@@ -161,39 +134,33 @@ fn filter(element: XmlNode<'_, '_>) -> Filter<Image> {
                 let referenced = (child.document().descendants())
                     .find(|node| node.attribute("id") == Some(id))
                     .unwrap_or_else(|| panic!("no element with id {id}"));
-                let image = referenced.descendants().filter_map(shape).collect();
-                (Primitive::Image(image), vec![])
+                Primitive::Image(referenced.descendants().filter_map(shape).collect())
             }
-            "feMerge" => {
-                let nodes = child.children().filter(XmlNode::is_element);
-                let inputs = nodes.map(|node| resolve_input(node, "in", &results));
-                (Primitive::Merge(Merge), inputs.collect())
-            }
-            "feDisplacementMap" => {
-                let displacement = DisplacementMap {
-                    scale: number_or(child, "scale", 0.0),
-                    x_channel: color_channel(child, "xChannelSelector"),
-                    y_channel: color_channel(child, "yChannelSelector"),
-                };
-                (
-                    Primitive::DisplacementMap(displacement),
-                    vec![input("in"), input("in2")],
-                )
-            }
-            "feMorphology" => {
-                let morphology = morphology(child);
-                (Primitive::Morphology(morphology), vec![input("in")])
-            }
-            "feOffset" => {
-                let offset = Offset {
-                    dx: number_or(child, "dx", 0.0),
-                    dy: number_or(child, "dy", 0.0),
-                };
-                (Primitive::Offset(offset), vec![input("in")])
-            }
-            "feTile" => (Primitive::Tile(Tile), vec![input("in")]),
-            "feTurbulence" => (Primitive::Turbulence(turbulence(child)), vec![]),
+            "feMerge" => Primitive::Merge(Merge),
+            "feDisplacementMap" => Primitive::DisplacementMap(DisplacementMap {
+                scale: number_or(child, "scale", 0.0),
+                x_channel: color_channel(child, "xChannelSelector"),
+                y_channel: color_channel(child, "yChannelSelector"),
+            }),
+            "feMorphology" => Primitive::Morphology(morphology(child)),
+            "feOffset" => Primitive::Offset(Offset {
+                dx: number_or(child, "dx", 0.0),
+                dy: number_or(child, "dy", 0.0),
+            }),
+            "feTile" => Primitive::Tile(Tile),
+            "feTurbulence" => Primitive::Turbulence(turbulence(child)),
             other => panic!("unsupported filter primitive <{other}>"),
+        };
+        let input = |node, name| resolve_input(node, name, &results);
+        let inputs = match tag {
+            "feFlood" | "feImage" | "feTurbulence" => vec![],
+            "feBlend" | "feComposite" | "feDisplacementMap" => {
+                vec![input(child, "in"), input(child, "in2")]
+            }
+            "feMerge" => (child.children().filter(XmlNode::is_element))
+                .map(|node| input(node, "in"))
+                .collect(),
+            _ => vec![input(child, "in")],
         };
 
         let mut node = Node::new(primitive, inputs);
@@ -212,9 +179,9 @@ fn filter(element: XmlNode<'_, '_>) -> Filter<Image> {
     filter
 }
 
-/// A missing `in` or a reference to an unknown result reads the previous result, or
-/// `SourceGraphic` for the first primitive (§9.2).
 fn resolve_input(node: XmlNode<'_, '_>, name: &str, results: &[Option<&str>]) -> Input {
+    // A missing `in` or a reference to an unknown result reads the previous result, or
+    // `SourceGraphic` for the first primitive (§9.2).
     let previous = match results.len() {
         0 => Input::SourceGraphic,
         n => Input::Result(n - 1),
@@ -295,13 +262,7 @@ fn color_channel(node: XmlNode<'_, '_>, name: &str) -> ColorChannel {
 }
 
 fn morphology(node: XmlNode<'_, '_>) -> Morphology {
-    // One number for both axes or two; anything else is the initial 0 (§9.17).
-    let radius = node.attribute("radius").map(numbers).unwrap_or_default();
-    let (radius_x, radius_y) = match *radius.as_slice() {
-        [r] => (r, r),
-        [x, y] => (x, y),
-        _ => (0.0, 0.0),
-    };
+    let (radius_x, radius_y) = number_pair(node, "radius").unwrap_or((0.0, 0.0));
     let operator = match node.attribute("operator").unwrap_or("erode") {
         "erode" => MorphologyOperator::Erode,
         "dilate" => MorphologyOperator::Dilate,
@@ -316,15 +277,8 @@ fn morphology(node: XmlNode<'_, '_>) -> Morphology {
 }
 
 fn turbulence(node: XmlNode<'_, '_>) -> Turbulence {
-    let frequency = node
-        .attribute("baseFrequency")
-        .map(numbers)
-        .unwrap_or_default();
-    let (base_frequency_x, base_frequency_y) = match *frequency.as_slice() {
-        [f] => (f, f),
-        [x, y] => (x, y),
-        _ => (0.0, 0.0),
-    };
+    let (base_frequency_x, base_frequency_y) =
+        number_pair(node, "baseFrequency").unwrap_or((0.0, 0.0));
     let kind = match node.attribute("type").unwrap_or("turbulence") {
         "turbulence" => TurbulenceType::Turbulence,
         "fractalNoise" => TurbulenceType::FractalNoise,
@@ -381,42 +335,27 @@ fn component_transfer(node: XmlNode<'_, '_>) -> ComponentTransfer {
 }
 
 fn gaussian_blur(node: XmlNode<'_, '_>) -> GaussianBlur {
-    let (std_dev_x, std_dev_y) = std_deviation(node, 0.0);
-    let edge_mode = match node.attribute("edgeMode").unwrap_or("none") {
-        "duplicate" => EdgeMode::Duplicate,
-        "wrap" => EdgeMode::Wrap,
-        "mirror" => EdgeMode::Mirror,
-        "none" => EdgeMode::None,
-        other => panic!("invalid edgeMode \"{other}\""),
-    };
+    let (std_dev_x, std_dev_y) = number_pair(node, "stdDeviation").unwrap_or((0.0, 0.0));
 
     GaussianBlur {
         std_dev_x,
         std_dev_y,
-        edge_mode,
+        edge_mode: edge_mode(node, "none"),
     }
 }
 
 fn convolve_matrix(node: XmlNode<'_, '_>) -> ConvolveMatrix {
     // Orders are truncated (§9.9); 0 stands for anything below 1, which is unsupported.
     let order = |value: f32| if value >= 1.0 { value as u32 } else { 0 };
-    let (order_x, order_y) = match node.attribute("order").map(numbers).as_deref() {
-        Some(&[both]) => (order(both), order(both)),
-        Some(&[x, y]) => (order(x), order(y)),
-        Some(_) => (0, 0),
+    let (order_x, order_y) = match number_pair(node, "order") {
+        Some((x, y)) => (order(x), order(y)),
+        None if node.has_attribute("order") => (0, 0),
         None => (3, 3),
     };
     let integer = |name| {
         optional_number(node, name)
             .filter(|value| value.fract() == 0.0)
             .map(|value| value as i32)
-    };
-    let edge_mode = match node.attribute("edgeMode").unwrap_or("duplicate") {
-        "duplicate" => EdgeMode::Duplicate,
-        "wrap" => EdgeMode::Wrap,
-        "mirror" => EdgeMode::Mirror,
-        "none" => EdgeMode::None,
-        other => panic!("invalid edgeMode \"{other}\""),
     };
 
     ConvolveMatrix {
@@ -430,7 +369,7 @@ fn convolve_matrix(node: XmlNode<'_, '_>) -> ConvolveMatrix {
         bias: number_or(node, "bias", 0.0),
         target_x: integer("targetX"),
         target_y: integer("targetY"),
-        edge_mode,
+        edge_mode: edge_mode(node, "duplicate"),
         kernel_unit_length: None,
         preserve_alpha: node.attribute("preserveAlpha") == Some("true"),
     }
@@ -467,13 +406,27 @@ fn light_source(node: XmlNode<'_, '_>) -> LightSource {
     }
 }
 
-fn std_deviation(node: XmlNode<'_, '_>, initial: f32) -> (f32, f32) {
-    // Anything but one or two numbers is an error, which leaves the initial value.
-    match node.attribute("stdDeviation").map(numbers).as_deref() {
-        Some(&[both]) => (both, both),
-        Some(&[x, y]) => (x, y),
-        _ => (initial, initial),
+fn number_pair(node: XmlNode<'_, '_>, name: &str) -> Option<(f32, f32)> {
+    // Anything but one or two numbers is an error, which leaves the attribute at its initial value.
+    match node.attribute(name).map(numbers).as_deref() {
+        Some(&[both]) => Some((both, both)),
+        Some(&[x, y]) => Some((x, y)),
+        _ => None,
     }
+}
+
+fn edge_mode(node: XmlNode<'_, '_>, initial: &str) -> EdgeMode {
+    match node.attribute("edgeMode").unwrap_or(initial) {
+        "duplicate" => EdgeMode::Duplicate,
+        "wrap" => EdgeMode::Wrap,
+        "mirror" => EdgeMode::Mirror,
+        "none" => EdgeMode::None,
+        other => panic!("invalid edgeMode \"{other}\""),
+    }
+}
+
+fn color_or(node: XmlNode<'_, '_>, name: &str, initial: Color) -> Color {
+    node.attribute(name).map_or(initial, color)
 }
 
 fn composite_operator(node: XmlNode<'_, '_>) -> CompositeOperator {
