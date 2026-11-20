@@ -1,6 +1,7 @@
-use fearless_simd::{Level, Select, Simd, dispatch, f32x8, prelude::*, u16x16, u32x8};
+use fearless_simd::{Select, Simd, f32x8, prelude::*, u16x16, u32x8};
 use filtra_types::BlendMode;
 
+use crate::dispatch::dispatch;
 use crate::simd::{Wide, div255, for_each_pixel_chunk, pack, unpack, unpremultiply};
 use crate::{Source, Target};
 
@@ -12,13 +13,11 @@ pub fn blend(
     mode: BlendMode,
     composite: bool,
 ) {
-    let level = Level::new();
-
     // One dispatch per mode keeps each mode in its own function, which keeps the stack frames of
     // debug builds small.
     macro_rules! blend_with {
         ($mode:ident) => {
-            dispatch!(level, simd => $mode(simd, [src, backdrop], composite, dst))
+            dispatch!(simd => $mode(simd, [src, backdrop], composite, dst))
         };
     }
 

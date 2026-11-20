@@ -1,6 +1,7 @@
-use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u32x8};
+use fearless_simd::{Simd, prelude::*, u8x32, u32x8};
 use filtra_types::MorphologyOperator;
 
+use crate::dispatch::dispatch;
 use crate::simd::for_each_chunk;
 use crate::{Source, Target};
 
@@ -12,14 +13,13 @@ pub fn morphology(
     radius: [u32; 2],
 ) {
     let [rx, ry] = radius;
-    let level = Level::new();
 
     match operator {
         MorphologyOperator::Erode => {
-            dispatch!(level, simd => morphology_inner::<_, false>(simd, src, dst, rx, ry));
+            dispatch!(simd => morphology_inner::<_, false>(simd, src, dst, rx, ry));
         }
         MorphologyOperator::Dilate => {
-            dispatch!(level, simd => morphology_inner::<_, true>(simd, src, dst, rx, ry));
+            dispatch!(simd => morphology_inner::<_, true>(simd, src, dst, rx, ry));
         }
     }
 }

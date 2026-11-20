@@ -1,12 +1,13 @@
-use fearless_simd::{Level, Simd, dispatch, u16x16};
+use fearless_simd::{Simd, u16x16};
 
+use crate::dispatch::dispatch;
 use crate::pixmap::for_each_segment;
 use crate::simd::{Wide, combine, div255, for_each_chunk};
 use crate::{Source, Target};
 
 /// `feMerge`.
 pub fn merge(inputs: &[Source<'_>], dst: Target<'_>) {
-    dispatch!(Level::new(), simd => merge_inner(simd, inputs, dst));
+    dispatch!(simd => merge_inner(simd, inputs, dst));
 }
 
 #[inline(always)]

@@ -1,5 +1,6 @@
-use fearless_simd::{Level, Simd, dispatch, f32x4, f32x8, prelude::*};
+use fearless_simd::{Simd, f32x4, f32x8, prelude::*};
 
+use crate::dispatch::dispatch;
 use crate::simd::{for_each_chunk, pack, premultiply};
 use crate::{IntRect, Target};
 
@@ -25,7 +26,7 @@ pub fn turbulence(dst: Target<'_>, turbulence: &Turbulence) {
     let lattice = Lattice::new(turbulence.seed);
     let noise = Noise::new(turbulence);
 
-    dispatch!(Level::new(), simd => render(simd, &lattice, &noise, dst));
+    dispatch!(simd => render(simd, &lattice, &noise, dst));
 }
 
 // The spec allows clamping the number of octaves (§9.21); later octaves change the result by

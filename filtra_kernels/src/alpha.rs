@@ -1,11 +1,12 @@
-use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u32x8};
+use fearless_simd::{Simd, prelude::*, u8x32, u32x8};
 
+use crate::dispatch::dispatch;
 use crate::simd::for_each_pixel_chunk;
 use crate::{Source, Target};
 
 /// The `SourceAlpha` input.
 pub fn alpha(src: Source<'_>, dst: Target<'_>) {
-    dispatch!(Level::new(), simd => alpha_inner(simd, src, dst));
+    dispatch!(simd => alpha_inner(simd, src, dst));
 }
 
 #[inline(always)]

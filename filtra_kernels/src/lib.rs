@@ -23,6 +23,7 @@ mod component_transfer;
 mod composite;
 #[cfg(feature = "convolve-matrix")]
 mod convolve_matrix;
+mod dispatch;
 #[cfg(feature = "displacement-map")]
 mod displacement_map;
 mod flood;

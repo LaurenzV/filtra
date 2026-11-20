@@ -1,11 +1,12 @@
-use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+use fearless_simd::{Simd, f32x8, prelude::*};
 
+use crate::dispatch::dispatch;
 use crate::simd::{for_each_pixel_chunk, pack, premultiply, unpack, unpremultiply};
 use crate::{Source, Target};
 
 /// `feColorMatrix`, with every `type` given as its matrix.
 pub fn color_matrix(src: Source<'_>, dst: Target<'_>, matrix: &[f32; 20]) {
-    dispatch!(Level::new(), simd => color_matrix_inner(simd, src, dst, matrix));
+    dispatch!(simd => color_matrix_inner(simd, src, dst, matrix));
 }
 
 #[inline(always)]
