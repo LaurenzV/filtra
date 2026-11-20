@@ -22,14 +22,5 @@ pub enum CompositeOperator {
     /// Porter-Duff lighter (plus).
     Lighter,
     /// `k1 * i1 * i2 + k2 * i1 + k3 * i2 + k4` per channel.
-    Arithmetic {
-        /// The `k1` attribute.
-        k1: f32,
-        /// The `k2` attribute.
-        k2: f32,
-        /// The `k3` attribute.
-        k3: f32,
-        /// The `k4` attribute.
-        k4: f32,
-    },
+    Arithmetic { k1: f32, k2: f32, k3: f32, k4: f32 },
 }

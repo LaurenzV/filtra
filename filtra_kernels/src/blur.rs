@@ -16,10 +16,8 @@ pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
     dispatch!(Level::new(), simd => blur(simd, src, dst, &axes));
 }
 
-/// Pixels per vector of 8-bit RGBA.
 const CHUNK: usize = 8;
-/// Transparent pixels left and right of every row of an intermediate image, which covers what
-/// the passes read past its edges.
+/// Transparent pixels on each side of every row of an intermediate image.
 const PAD: usize = 32;
 /// Beyond this, a blur spreads any image too thin to leave a visible pixel.
 const MAX_STD_DEV: f32 = 1e11;
@@ -88,7 +86,6 @@ fn blur<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, axes: &[Axis; 2]
     fill_target(simd, input, last_ops, last_spans, dst);
 }
 
-/// How one axis is blurred: halved `halvings` times, then convolved with `weights`.
 struct Axis {
     halvings: usize,
     /// The weight of the centre followed by those of the distances 1, 2, …, summing to 2^15 over
@@ -140,8 +137,7 @@ impl Axis {
     }
 }
 
-/// Columns or rows from `.0` inclusive to `.1` exclusive. Every empty span is [`Span::EMPTY`], which
-/// the methods below keep empty.
+/// Columns or rows from `.0` inclusive to `.1` exclusive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Span(i64, i64);
 
@@ -208,13 +204,11 @@ fn spans(rect: IntRect) -> [Span; 2] {
     [span(rect.x0, rect.x1), span(rect.y0, rect.y1)]
 }
 
-/// The pixels each pass computes along one axis. Outside of them, its result is either
-/// transparent or not read by a later pass.
+/// The pixels each pass computes along one axis.
 struct Layout {
     /// The halved levels, indexed by level from 1.
     down: Vec<Span>,
-    /// The Gaussian on the coarsest level, at its index, and the levels doubled from it down to 0,
-    /// the result.
+    /// The Gaussian on the coarsest level and the levels doubled from it, indexed by level.
     up: Vec<Span>,
 }
 
@@ -268,7 +262,6 @@ struct Plane {
 }
 
 impl Plane {
-    /// A plane that reuses the memory of `data`.
     fn new([x, y]: [Span; 2], mut data: Vec<u8>) -> Self {
         let stride = (x.len() + 2 * PAD) * 4;
         data.resize(stride * y.len(), 0);
@@ -403,8 +396,8 @@ struct Pass<'a, S: Simd> {
 /// Chunks of the horizontal step that read the input row in the same way.
 struct Part {
     chunks: Range<usize>,
-    /// A copy of the source columns that the chunks read, with transparent pixels where they lie
-    /// outside of the source; `None` for chunks that read inside of the input row.
+    /// The source columns that the chunks read, padded with transparent pixels; `None` if they
+    /// lie inside of the input row.
     copy: Option<Vec<u8>>,
 }
 
@@ -467,7 +460,6 @@ impl<'a, S: Simd> Pass<'a, S> {
         }
     }
 
-    /// Computes output row `y` into `out`, which holds the output columns.
     fn row(&mut self, y: i64, out: &mut [u8]) {
         let simd = self.simd;
         simd.vectorize(

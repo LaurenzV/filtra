@@ -12,8 +12,7 @@ pub use filtra_kernels::{IntRect, Pixmap, PixmapMut};
 pub use filtra_plan::Transform;
 pub use filtra_types as types;
 
-/// Applies `filter` to `pixmap`, whose pixels are placed in user space by `transform`, and
-/// replaces its pixels with the result, using the memory of `pool` for intermediate images.
+/// Applies `filter` to `pixmap` in place, with `transform` mapping user space to its pixels.
 pub fn apply<I>(
     filter: &types::Filter<I>,
     pixmap: PixmapMut<'_>,
