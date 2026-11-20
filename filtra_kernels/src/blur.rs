@@ -660,29 +660,22 @@ fn horizontal<S: MulQ15>(
                 );
             }
         }
-        Op::Gauss(weights) => match weights.len() - 1 {
-            1 => gauss_horizontal::<S, 1>(simd, weights, row, out),
-            2 => gauss_horizontal::<S, 2>(simd, weights, row, out),
-            3 => gauss_horizontal::<S, 3>(simd, weights, row, out),
-            4 => gauss_horizontal::<S, 4>(simd, weights, row, out),
-            5 => gauss_horizontal::<S, 5>(simd, weights, row, out),
-            6 => gauss_horizontal::<S, 6>(simd, weights, row, out),
-            radius => unreachable!("radius {radius}"),
-        },
+        Op::Gauss(weights) => gauss_horizontal(simd, weights.len() - 1, weights, row, out),
     }
 }
 
-/// The horizontal Gaussian of radius `R` for the chunks of `out`, from `row` starting `R` pixels
+/// The horizontal Gaussian of radius `r` for the chunks of `out`, from `row` starting `r` pixels
 /// before the first output.
 #[inline(always)]
-fn gauss_horizontal<S: MulQ15, const R: usize>(
+fn gauss_horizontal<S: MulQ15>(
     simd: S,
+    r: usize,
     weights: &[u16],
     row: &[u8],
     out: &mut [[u16; 32]],
 ) {
     let weights = fixed_weights(weights);
-    let windows = row.windows((CHUNK + 2 * R) * 4).step_by(CHUNK * 4);
+    let windows = row.windows((CHUNK + 2 * r) * 4).step_by(CHUNK * 4);
 
     for (out, window) in out.iter_mut().zip(windows) {
         let wide = {
@@ -696,12 +689,12 @@ fn gauss_horizontal<S: MulQ15, const R: usize>(
             #[inline(always)]
             |v: u16x16<S>, weight: u16| weighted(simd, v << GAUSS_FRACTION, weight)
         };
-        let centre = wide(R);
+        let centre = wide(r);
         let mut even = term(centre.even, weights[0]);
         let mut odd = term(centre.odd, weights[0]);
 
-        for (i, &weight) in weights.iter().enumerate().take(R + 1).skip(1) {
-            let (a, b) = (wide(R + i), wide(R - i));
+        for (i, &weight) in weights.iter().enumerate().take(r + 1).skip(1) {
+            let (a, b) = (wide(r + i), wide(r - i));
             even += term(a.even + b.even, weight);
             odd += term(a.odd + b.odd, weight);
         }
@@ -778,22 +771,15 @@ fn vertical<S: MulQ15>(
                 store(out, tap(a.0, b.0), tap(a.1, b.1));
             }
         }
-        Op::Gauss(weights) => match weights.len() - 1 {
-            1 => gauss_vertical::<S, 1>(simd, weights, fraction, rows, out),
-            2 => gauss_vertical::<S, 2>(simd, weights, fraction, rows, out),
-            3 => gauss_vertical::<S, 3>(simd, weights, fraction, rows, out),
-            4 => gauss_vertical::<S, 4>(simd, weights, fraction, rows, out),
-            5 => gauss_vertical::<S, 5>(simd, weights, fraction, rows, out),
-            6 => gauss_vertical::<S, 6>(simd, weights, fraction, rows, out),
-            radius => unreachable!("radius {radius}"),
-        },
+        Op::Gauss(weights) => gauss_vertical(simd, weights.len() - 1, weights, fraction, rows, out),
     }
 }
 
-/// The vertical Gaussian of radius `R` into the chunks of `out`, from the `2R + 1` rows around it.
+/// The vertical Gaussian of radius `r` into the chunks of `out`, from the `2r + 1` rows around it.
 #[inline(always)]
-fn gauss_vertical<S: MulQ15, const R: usize>(
+fn gauss_vertical<S: MulQ15>(
     simd: S,
+    r: usize,
     weights: &[u16],
     fraction: u32,
     rows: &[&[[u16; 32]]],
@@ -803,9 +789,22 @@ fn gauss_vertical<S: MulQ15, const R: usize>(
     let scale = GAUSS_FRACTION - fraction;
     let len = out.len();
     // Rows of exactly the output length let the compiler drop the bounds checks.
-    let centre = &rows[R][..len];
-    let above: [&[[u16; 32]]; R] = core::array::from_fn(|i| &rows[R - 1 - i][..len]);
-    let below: [&[[u16; 32]]; R] = core::array::from_fn(|i| &rows[R + 1 + i][..len]);
+    let centre = &rows[r][..len];
+    let empty: &[[u16; 32]] = &[];
+    let above: [&[[u16; 32]]; MAX_TAPS / 2] = core::array::from_fn(|i| {
+        if i < r {
+            &rows[r - 1 - i][..len]
+        } else {
+            empty
+        }
+    });
+    let below: [&[[u16; 32]]; MAX_TAPS / 2] = core::array::from_fn(|i| {
+        if i < r {
+            &rows[r + 1 + i][..len]
+        } else {
+            empty
+        }
+    });
 
     for (chunk, (out, centre)) in out.iter_mut().zip(centre).enumerate() {
         let sum = {
@@ -817,7 +816,7 @@ fn gauss_vertical<S: MulQ15, const R: usize>(
                 };
                 let mut sum = weighted(simd, load(centre) << scale, weights[0]);
 
-                for (i, (above, below)) in above.iter().zip(&below).enumerate() {
+                for (i, (above, below)) in above.iter().zip(&below).enumerate().take(r) {
                     let pair = load(&above[chunk]) + load(&below[chunk]);
                     sum += weighted(simd, pair << scale, weights[i + 1]);
                 }
