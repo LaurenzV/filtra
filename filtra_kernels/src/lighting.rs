@@ -184,11 +184,11 @@ fn shade<S: Simd>(
     let lanes = f32x8::from_slice(simd, &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
     let user_y = (rect.y0 as f32 + y as f32 - lighting.origin[1]) / scale_y;
     let [red, green, blue] = lighting.color;
-    let mut x = 0;
 
     for_each_chunk::<0>([], output, {
         #[inline(always)]
-        |[], output: &mut [u8; 32]| {
+        |i, [], output: &mut [u8; 32]| {
+            let x = 8 * i;
             let load = {
                 #[inline(always)]
                 |row: &[f32], offset: usize| f32x8::from_slice(simd, &row[x + offset..][..8])
@@ -282,7 +282,6 @@ fn shade<S: Simd>(
             };
 
             pack(pixels, output);
-            x += 8;
         }
     });
 }

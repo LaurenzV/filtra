@@ -1,7 +1,6 @@
 use fearless_simd::{Level, Simd, dispatch, f32x8, i32x8, prelude::*};
 
-use crate::pixmap::segments;
-use crate::simd::{for_each_chunk, pack, premultiply, unpack};
+use crate::simd::{for_each_pixel_chunk, pack, premultiply, unpack};
 use crate::{Source, Target};
 
 /// `feComponentTransfer`, with every function given as piecewise linear segments.
@@ -13,10 +12,9 @@ pub fn component_transfer(src: Source<'_>, dst: Target<'_>, functions: [&[[f32; 
 fn component_transfer_inner<S: Simd>(
     simd: S,
     src: Source<'_>,
-    mut dst: Target<'_>,
+    dst: Target<'_>,
     functions: [&[[f32; 2]]; 4],
 ) {
-    let rect = dst.rect();
     let opaque = f32x8::splat(simd, 255.0);
 
     let remap = {
@@ -33,27 +31,21 @@ fn component_transfer_inner<S: Simd>(
         }
     };
 
-    for (y, row) in dst.rows_mut() {
-        for (x0, x1) in segments(rect.x0, rect.x1, [src.rect()].into_iter()) {
-            let output = &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4];
+    for_each_pixel_chunk([src], dst, {
+        #[inline(always)]
+        |[source]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
+            let [r, g, b, a] = unpack(simd, source);
+            let divisor = a.max(1.0);
+            let remapped = [
+                remap(r, divisor, functions[0]),
+                remap(g, divisor, functions[1]),
+                remap(b, divisor, functions[2]),
+                remap(a, opaque, functions[3]),
+            ];
 
-            for_each_chunk([src.row(y, x0, x1)], output, {
-                #[inline(always)]
-                |[source]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
-                    let [r, g, b, a] = unpack(simd, source);
-                    let divisor = a.max(1.0);
-                    let remapped = [
-                        remap(r, divisor, functions[0]),
-                        remap(g, divisor, functions[1]),
-                        remap(b, divisor, functions[2]),
-                        remap(a, opaque, functions[3]),
-                    ];
-
-                    pack(premultiply(remapped), output);
-                }
-            });
+            pack(premultiply(remapped), output);
         }
-    }
+    });
 }
 
 #[inline(always)]

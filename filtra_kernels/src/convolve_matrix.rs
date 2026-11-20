@@ -100,11 +100,11 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
         }
 
         let center = slots[convolution.target[1] as usize] + 3 * input.stride + input.target_x;
-        let mut x = 0;
 
         for_each_chunk::<0>([], output, {
             #[inline(always)]
-            |[], output: &mut [u8; 32]| {
+            |i, [], output: &mut [u8; 32]| {
+                let x = 8 * i;
                 let mut sums = [f32x8::splat(simd, 0.0); 4];
 
                 for (&slot, weights) in slots.iter().zip(convolution.weights.chunks_exact(columns))
@@ -144,7 +144,6 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
                 };
 
                 pack(pixels, output);
-                x += 8;
             }
         });
     }

@@ -1,7 +1,6 @@
 use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
 
-use crate::pixmap::segments;
-use crate::simd::{for_each_chunk, pack, premultiply, unpack, unpremultiply};
+use crate::simd::{for_each_pixel_chunk, pack, premultiply, unpack, unpremultiply};
 use crate::{Source, Target};
 
 /// `feColorMatrix`, with every `type` given as its matrix.
@@ -10,8 +9,7 @@ pub fn color_matrix(src: Source<'_>, dst: Target<'_>, matrix: &[f32; 20]) {
 }
 
 #[inline(always)]
-fn color_matrix_inner<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, matrix: &[f32; 20]) {
-    let rect = dst.rect();
+fn color_matrix_inner<S: Simd>(simd: S, src: Source<'_>, dst: Target<'_>, matrix: &[f32; 20]) {
     let m: [f32x8<S>; 20] = core::array::from_fn({
         #[inline(always)]
         |i| f32x8::splat(simd, matrix[i])
@@ -25,24 +23,18 @@ fn color_matrix_inner<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, ma
         }
     };
 
-    for (y, row) in dst.rows_mut() {
-        for (x0, x1) in segments(rect.x0, rect.x1, [src.rect()].into_iter()) {
-            let output = &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4];
+    for_each_pixel_chunk([src], dst, {
+        #[inline(always)]
+        |[source]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
+            let color = unpremultiply(unpack(simd, source));
+            let transformed = [
+                transform(0, color),
+                transform(1, color),
+                transform(2, color),
+                transform(3, color),
+            ];
 
-            for_each_chunk([src.row(y, x0, x1)], output, {
-                #[inline(always)]
-                |[source]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
-                    let color = unpremultiply(unpack(simd, source));
-                    let transformed = [
-                        transform(0, color),
-                        transform(1, color),
-                        transform(2, color),
-                        transform(3, color),
-                    ];
-
-                    pack(premultiply(transformed), output);
-                }
-            });
+            pack(premultiply(transformed), output);
         }
-    }
+    });
 }
