@@ -113,6 +113,7 @@ name = "filtra_kernels"
 version = "0.1.0"
 dependencies = [
  "fearless_simd 1.2.0",
+ "filtra_types",
 ]
 
 [[package]]

@@ -1,21 +1,9 @@
 use fearless_simd::{Level, Simd, dispatch, f32x8, i32x8, prelude::*};
+use filtra_types::ColorChannel;
 
 use crate::pixmap::for_each_segment;
 use crate::simd::{for_each_chunk, unpack, unpremultiply};
 use crate::{Source, Target};
-
-/// A color or alpha channel.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ColorChannel {
-    /// Red.
-    R,
-    /// Green.
-    G,
-    /// Blue.
-    B,
-    /// Alpha.
-    A,
-}
 
 /// `feDisplacementMap`, with `scale` in pixels.
 pub fn displacement_map(

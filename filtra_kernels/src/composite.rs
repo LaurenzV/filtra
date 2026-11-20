@@ -1,27 +1,17 @@
 use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u16x16};
+use filtra_types::CompositeOperator;
 
+use crate::arithmetic::arithmetic;
 use crate::simd::{Wide, combine, div255, for_each_pixel_chunk};
 use crate::{Source, Target};
 
-/// A Porter-Duff compositing operator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PorterDuff {
-    /// Source over destination.
-    Over,
-    /// Source in destination.
-    In,
-    /// Source out of destination.
-    Out,
-    /// Source atop destination.
-    Atop,
-    /// Source XOR destination.
-    Xor,
-    /// The sum of source and destination, clamped.
-    Lighter,
-}
-
-/// `feComposite` with a Porter-Duff `operator`.
-pub fn composite(src: Source<'_>, backdrop: Source<'_>, dst: Target<'_>, operator: PorterDuff) {
+/// `feComposite`.
+pub fn composite(
+    src: Source<'_>,
+    backdrop: Source<'_>,
+    dst: Target<'_>,
+    operator: CompositeOperator,
+) {
     dispatch!(Level::new(), simd => composite_inner(simd, src, backdrop, dst, operator));
 }
 
@@ -31,17 +21,20 @@ fn composite_inner<S: Simd>(
     src: Source<'_>,
     backdrop: Source<'_>,
     dst: Target<'_>,
-    operator: PorterDuff,
+    operator: CompositeOperator,
 ) {
     let inputs = [src, backdrop];
 
     match operator {
-        PorterDuff::Over => over(simd, inputs, dst),
-        PorterDuff::In => in_(simd, inputs, dst),
-        PorterDuff::Out => out(simd, inputs, dst),
-        PorterDuff::Atop => atop(simd, inputs, dst),
-        PorterDuff::Xor => xor(simd, inputs, dst),
-        PorterDuff::Lighter => lighter(simd, inputs, dst),
+        CompositeOperator::Over => over(simd, inputs, dst),
+        CompositeOperator::In => in_(simd, inputs, dst),
+        CompositeOperator::Out => out(simd, inputs, dst),
+        CompositeOperator::Atop => atop(simd, inputs, dst),
+        CompositeOperator::Xor => xor(simd, inputs, dst),
+        CompositeOperator::Lighter => lighter(simd, inputs, dst),
+        CompositeOperator::Arithmetic { k1, k2, k3, k4 } => {
+            arithmetic(simd, inputs, dst, [k1, k2, k3, k4]);
+        }
     }
 }
 

@@ -1,19 +1,9 @@
 use super::Backend;
-#[cfg(feature = "blend")]
-use filtra_kernels::BlendMode;
-#[cfg(feature = "displacement-map")]
-use filtra_kernels::ColorChannel;
-#[cfg(feature = "morphology")]
-use filtra_kernels::MorphologyOperator;
-#[cfg(feature = "composite")]
-use filtra_kernels::PorterDuff;
-use filtra_kernels::{ColorSpace, IntRect, PixmapMut, Source, Target};
 #[cfg(feature = "convolve-matrix")]
-use filtra_kernels::{Convolution, EdgeMode};
+use filtra_kernels::Convolution;
+use filtra_kernels::{ColorSpace, IntRect, PixmapMut, Source, Target};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 use filtra_kernels::{Light, Lighting, Reflection};
-#[cfg(feature = "composite")]
-use filtra_plan::CompositeOperator;
 use filtra_plan::{ImageId, Pass, Plan, Step};
 
 pub(super) fn execute(
@@ -199,7 +189,7 @@ fn execute_step(
         } => store.write(*dst, |inputs, target| {
             let src = inputs.read(*src);
             let backdrop = inputs.read(*backdrop);
-            composite(src, backdrop, *operator, target);
+            filtra_kernels::composite(src, backdrop, target, *operator);
         }),
         #[cfg(feature = "blend")]
         Step::Blend {
@@ -211,7 +201,7 @@ fn execute_step(
         } => store.write(*dst, |inputs, target| {
             let src = inputs.read(*src);
             let backdrop = inputs.read(*backdrop);
-            filtra_kernels::blend(src, backdrop, target, blend_mode(*mode), *composite);
+            filtra_kernels::blend(src, backdrop, target, *mode, *composite);
         }),
         #[cfg(feature = "merge")]
         Step::Merge { srcs, dst } => store.write(*dst, |inputs, target| {
@@ -226,11 +216,7 @@ fn execute_step(
             rx,
             ry,
         } => store.write(*dst, |inputs, target| {
-            let operator = match operator {
-                filtra_plan::MorphologyOperator::Erode => MorphologyOperator::Erode,
-                filtra_plan::MorphologyOperator::Dilate => MorphologyOperator::Dilate,
-            };
-            filtra_kernels::morphology(inputs.read(*src), target, operator, [*rx, *ry]);
+            filtra_kernels::morphology(inputs.read(*src), target, *operator, [*rx, *ry]);
         }),
         #[cfg(feature = "displacement-map")]
         Step::DisplacementMap {
@@ -240,14 +226,8 @@ fn execute_step(
             scale,
             channels,
         } => store.write(*dst, |inputs, target| {
-            let channels = channels.map(|channel| match channel {
-                filtra_plan::ColorChannel::R => ColorChannel::R,
-                filtra_plan::ColorChannel::G => ColorChannel::G,
-                filtra_plan::ColorChannel::B => ColorChannel::B,
-                filtra_plan::ColorChannel::A => ColorChannel::A,
-            });
             let (src, map) = (inputs.read(*src), inputs.read(*map));
-            filtra_kernels::displacement_map(src, map, target, *scale, channels);
+            filtra_kernels::displacement_map(src, map, target, *scale, *channels);
         }),
         #[cfg(feature = "turbulence")]
         Step::Turbulence {
@@ -298,12 +278,7 @@ fn execute_step(
                 weights,
                 target: *target,
                 bias: *bias,
-                edge_mode: match edge_mode {
-                    filtra_plan::EdgeMode::Duplicate => EdgeMode::Duplicate,
-                    filtra_plan::EdgeMode::Wrap => EdgeMode::Wrap,
-                    filtra_plan::EdgeMode::Mirror => EdgeMode::Mirror,
-                    filtra_plan::EdgeMode::None => EdgeMode::None,
-                },
+                edge_mode: *edge_mode,
                 preserve_alpha: *preserve_alpha,
             };
             filtra_kernels::convolve_matrix(inputs.read(*src), output, &convolution);
@@ -375,48 +350,9 @@ fn kernel_rect(rect: filtra_plan::IntRect) -> IntRect {
     IntRect::new(rect.x0, rect.y0, rect.x1, rect.y1)
 }
 
-#[cfg(feature = "blend")]
-fn blend_mode(mode: filtra_plan::BlendMode) -> BlendMode {
-    match mode {
-        filtra_plan::BlendMode::Normal => BlendMode::Normal,
-        filtra_plan::BlendMode::Multiply => BlendMode::Multiply,
-        filtra_plan::BlendMode::Screen => BlendMode::Screen,
-        filtra_plan::BlendMode::Overlay => BlendMode::Overlay,
-        filtra_plan::BlendMode::Darken => BlendMode::Darken,
-        filtra_plan::BlendMode::Lighten => BlendMode::Lighten,
-        filtra_plan::BlendMode::ColorDodge => BlendMode::ColorDodge,
-        filtra_plan::BlendMode::ColorBurn => BlendMode::ColorBurn,
-        filtra_plan::BlendMode::HardLight => BlendMode::HardLight,
-        filtra_plan::BlendMode::SoftLight => BlendMode::SoftLight,
-        filtra_plan::BlendMode::Difference => BlendMode::Difference,
-        filtra_plan::BlendMode::Exclusion => BlendMode::Exclusion,
-        filtra_plan::BlendMode::Hue => BlendMode::Hue,
-        filtra_plan::BlendMode::Saturation => BlendMode::Saturation,
-        filtra_plan::BlendMode::Color => BlendMode::Color,
-        filtra_plan::BlendMode::Luminosity => BlendMode::Luminosity,
-    }
-}
-
 fn color_space(space: filtra_plan::ColorSpace) -> ColorSpace {
     match space {
         filtra_plan::ColorSpace::Srgb => ColorSpace::Srgb,
         filtra_plan::ColorSpace::LinearRgb => ColorSpace::LinearRgb,
     }
-}
-
-#[cfg(feature = "composite")]
-fn composite(src: Source<'_>, backdrop: Source<'_>, operator: CompositeOperator, dst: Target<'_>) {
-    let operator = match operator {
-        CompositeOperator::Over => PorterDuff::Over,
-        CompositeOperator::In => PorterDuff::In,
-        CompositeOperator::Out => PorterDuff::Out,
-        CompositeOperator::Atop => PorterDuff::Atop,
-        CompositeOperator::Xor => PorterDuff::Xor,
-        CompositeOperator::Lighter => PorterDuff::Lighter,
-        CompositeOperator::Arithmetic { k1, k2, k3, k4 } => {
-            return filtra_kernels::arithmetic(src, backdrop, dst, [k1, k2, k3, k4]);
-        }
-    };
-
-    filtra_kernels::composite(src, backdrop, dst, operator);
 }

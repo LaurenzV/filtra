@@ -45,10 +45,8 @@ mod tile;
 mod turbulence;
 
 pub use alpha::alpha;
-#[cfg(feature = "composite")]
-pub use arithmetic::arithmetic;
 #[cfg(feature = "blend")]
-pub use blend::{BlendMode, blend};
+pub use blend::blend;
 #[cfg(feature = "gaussian-blur")]
 pub use blur::gaussian_blur;
 #[cfg(feature = "color-matrix")]
@@ -57,18 +55,18 @@ pub use color_space::{ColorSpace, convert};
 #[cfg(feature = "component-transfer")]
 pub use component_transfer::component_transfer;
 #[cfg(feature = "composite")]
-pub use composite::{PorterDuff, composite};
+pub use composite::composite;
 #[cfg(feature = "convolve-matrix")]
-pub use convolve_matrix::{Convolution, EdgeMode, convolve_matrix};
+pub use convolve_matrix::{Convolution, convolve_matrix};
 #[cfg(feature = "displacement-map")]
-pub use displacement_map::{ColorChannel, displacement_map};
+pub use displacement_map::displacement_map;
 pub use flood::flood;
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 pub use lighting::{Light, Lighting, Reflection, lighting};
 #[cfg(feature = "merge")]
 pub use merge::merge;
 #[cfg(feature = "morphology")]
-pub use morphology::{MorphologyOperator, morphology};
+pub use morphology::morphology;
 pub use offset::offset;
 pub use pixmap::{Pixmap, PixmapMut, Source, Target};
 pub use rect::IntRect;
@@ -76,3 +74,14 @@ pub use rect::IntRect;
 pub use tile::tile;
 #[cfg(feature = "turbulence")]
 pub use turbulence::{Turbulence, turbulence};
+
+#[cfg(feature = "blend")]
+pub use filtra_types::BlendMode;
+#[cfg(feature = "displacement-map")]
+pub use filtra_types::ColorChannel;
+#[cfg(feature = "composite")]
+pub use filtra_types::CompositeOperator;
+#[cfg(feature = "convolve-matrix")]
+pub use filtra_types::EdgeMode;
+#[cfg(feature = "morphology")]
+pub use filtra_types::MorphologyOperator;
