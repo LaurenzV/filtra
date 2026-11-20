@@ -1,4 +1,4 @@
-use crate::BufferPool;
+use super::Backend;
 #[cfg(feature = "blend")]
 use filtra_kernels::BlendMode;
 #[cfg(feature = "displacement-map")]
@@ -16,11 +16,11 @@ use filtra_kernels::{Light, Lighting, Reflection};
 use filtra_plan::CompositeOperator;
 use filtra_plan::{ImageId, Pass, Plan, Step};
 
-pub(crate) fn execute(
+pub(super) fn execute(
     plan: &Plan,
     pixmap: PixmapMut<'_>,
-    pool: &mut BufferPool,
-    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
+    backend: &mut Backend,
+    render_image: &mut dyn FnMut(usize, filtra_plan::IntRect, &mut [u8]),
 ) {
     let assignment = filtra_plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
     let mut images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
@@ -44,7 +44,7 @@ pub(crate) fn execute(
     let mut store = Store {
         pixmap,
         images,
-        buffers: pool.take(assignment.count),
+        buffers: backend.take(assignment.count),
     };
 
     for step in &plan.steps {
@@ -58,7 +58,7 @@ pub(crate) fn execute(
         });
     }
 
-    pool.keep(store.buffers);
+    backend.keep(store.buffers);
 }
 
 #[derive(Clone, Copy)]
@@ -160,7 +160,7 @@ impl<'a> Inputs<'a> {
 fn execute_step(
     step: &Step,
     store: &mut Store<'_>,
-    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
+    render_image: &mut dyn FnMut(usize, filtra_plan::IntRect, &mut [u8]),
 ) {
     match step {
         Step::Alpha { src, dst } => store.write(*dst, |inputs, target| {
@@ -178,6 +178,7 @@ fn execute_step(
             data.fill(0);
 
             if !rect.is_empty() {
+                let rect = filtra_plan::IntRect::new(rect.x0, rect.y0, rect.x1, rect.y1);
                 render_image(*image, rect, data);
             }
         }
