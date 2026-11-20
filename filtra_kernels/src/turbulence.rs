@@ -1,6 +1,6 @@
 use fearless_simd::{Level, Simd, dispatch, f32x4, f32x8, prelude::*};
 
-use crate::simd::{pack, premultiply};
+use crate::simd::{for_each_chunk, pack, premultiply};
 use crate::{IntRect, Target};
 
 /// Perlin turbulence (`feTurbulence`).
@@ -43,7 +43,10 @@ const RAND_R: i64 = 2836;
 #[inline(always)]
 fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_>) {
     let rect = dst.rect();
-    let select = |b: u8| lattice.selector[usize::from(b)];
+    let select = {
+        #[inline(always)]
+        |b: u8| lattice.selector[usize::from(b)]
+    };
     let points: Vec<f64> = (rect.x0..rect.x1)
         .map(|x| (f64::from(x) - noise.origin[0]) * noise.frequency[0])
         .collect();
@@ -79,11 +82,12 @@ fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_
                 }
 
                 let (i, j) = (select(bx0 as u8), select(bx1 as u8));
-                let corner = |i: u8, b: u8| {
-                    f32x8::from_slice(
-                        simd,
-                        &lattice.gradients[usize::from(select(i.wrapping_add(b)))],
-                    )
+                let corner = {
+                    #[inline(always)]
+                    |i: u8, b: u8| {
+                        let gradient = &lattice.gradients[usize::from(select(i.wrapping_add(b)))];
+                        f32x8::from_slice(simd, gradient)
+                    }
                 };
                 let sx = s_curve(rx0);
                 let (rx0, rx1) = (f32x4::splat(simd, rx0), f32x4::splat(simd, rx0 - 1.0));
@@ -105,25 +109,31 @@ fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_
             factor *= 2.0;
         }
 
-        for (chunk, pixels) in row.chunks_mut(32).enumerate() {
-            let sums = &sums[chunk * 32..][..32];
-            let v: [f32x8<S>; 4] =
-                core::array::from_fn(|k| f32x8::from_slice(simd, &sums[k * 8..][..8]));
+        for_each_chunk::<0>([], row, {
+            #[inline(always)]
+            |i, [], pixels: &mut [u8; 32]| {
+                let sums = &sums[i * 32..][..32];
+                let load = {
+                    #[inline(always)]
+                    |k: usize| f32x8::from_slice(simd, &sums[k * 8..][..8])
+                };
+                let (v0, v1, v2, v3) = (load(0), load(1), load(2), load(3));
+                let (even0, odd0) = (v0.unzip_low(v1), v0.unzip_high(v1));
+                let (even1, odd1) = (v2.unzip_low(v3), v2.unzip_high(v3));
+                let channel = {
+                    #[inline(always)]
+                    |c: f32x8<S>| if noise.fractal { (c + 1.0) * 0.5 } else { c }
+                };
+                let channels = [
+                    channel(even0.unzip_low(even1)),
+                    channel(odd0.unzip_low(odd1)),
+                    channel(even0.unzip_high(even1)),
+                    channel(odd0.unzip_high(odd1)),
+                ];
 
-            let (even0, odd0) = (v[0].unzip_low(v[1]), v[0].unzip_high(v[1]));
-            let (even1, odd1) = (v[2].unzip_low(v[3]), v[2].unzip_high(v[3]));
-            let channels = [
-                even0.unzip_low(even1),
-                odd0.unzip_low(odd1),
-                even0.unzip_high(even1),
-                odd0.unzip_high(odd1),
-            ]
-            .map(|c| if noise.fractal { (c + 1.0) * 0.5 } else { c });
-
-            let mut bytes = [0; 32];
-            pack(premultiply(channels), &mut bytes);
-            pixels.copy_from_slice(&bytes[..pixels.len()]);
-        }
+                pack(premultiply(channels), pixels);
+            }
+        });
     }
 }
 
