@@ -21,8 +21,8 @@ pub enum PorterDuff {
 }
 
 /// `feComposite` with a Porter-Duff `operator`.
-pub fn composite(src: Source<'_>, backdrop: Source<'_>, operator: PorterDuff, dst: Target<'_>) {
-    dispatch!(Level::new(), simd => composite_inner(simd, src, backdrop, operator, dst));
+pub fn composite(src: Source<'_>, backdrop: Source<'_>, dst: Target<'_>, operator: PorterDuff) {
+    dispatch!(Level::new(), simd => composite_inner(simd, src, backdrop, dst, operator));
 }
 
 #[inline(always)]
@@ -30,8 +30,8 @@ fn composite_inner<S: Simd>(
     simd: S,
     src: Source<'_>,
     backdrop: Source<'_>,
-    operator: PorterDuff,
     dst: Target<'_>,
+    operator: PorterDuff,
 ) {
     let inputs = [src, backdrop];
 

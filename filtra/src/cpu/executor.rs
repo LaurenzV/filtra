@@ -54,7 +54,7 @@ pub(super) fn execute(
     if !in_place {
         let rect = store.images[plan.output.0].rect;
         store.write_pixmap(rect, |inputs, target| {
-            filtra_kernels::offset(inputs.read(plan.output), target, 0, 0);
+            filtra_kernels::offset(inputs.read(plan.output), target, [0, 0]);
         });
     }
 
@@ -183,12 +183,12 @@ fn execute_step(
             }
         }
         Step::Offset { src, dst, dx, dy } => store.write(*dst, |inputs, target| {
-            filtra_kernels::offset(inputs.read(*src), target, *dx, *dy);
+            filtra_kernels::offset(inputs.read(*src), target, [*dx, *dy]);
         }),
         #[cfg(feature = "tile")]
         Step::Tile { src, cell, dst } => store.write(*dst, |inputs, target| {
             let cell = kernel_rect(*cell);
-            filtra_kernels::tile(inputs.read(*src), cell, target);
+            filtra_kernels::tile(inputs.read(*src), target, cell);
         }),
         #[cfg(feature = "composite")]
         Step::Composite {
@@ -211,7 +211,7 @@ fn execute_step(
         } => store.write(*dst, |inputs, target| {
             let src = inputs.read(*src);
             let backdrop = inputs.read(*backdrop);
-            filtra_kernels::blend(src, backdrop, blend_mode(*mode), *composite, target);
+            filtra_kernels::blend(src, backdrop, target, blend_mode(*mode), *composite);
         }),
         #[cfg(feature = "merge")]
         Step::Merge { srcs, dst } => store.write(*dst, |inputs, target| {
@@ -230,7 +230,7 @@ fn execute_step(
                 filtra_plan::MorphologyOperator::Erode => MorphologyOperator::Erode,
                 filtra_plan::MorphologyOperator::Dilate => MorphologyOperator::Dilate,
             };
-            filtra_kernels::morphology(inputs.read(*src), target, operator, *rx, *ry);
+            filtra_kernels::morphology(inputs.read(*src), target, operator, [*rx, *ry]);
         }),
         #[cfg(feature = "displacement-map")]
         Step::DisplacementMap {
@@ -414,9 +414,9 @@ fn composite(src: Source<'_>, backdrop: Source<'_>, operator: CompositeOperator,
         CompositeOperator::Xor => PorterDuff::Xor,
         CompositeOperator::Lighter => PorterDuff::Lighter,
         CompositeOperator::Arithmetic { k1, k2, k3, k4 } => {
-            return filtra_kernels::arithmetic(src, backdrop, [k1, k2, k3, k4], dst);
+            return filtra_kernels::arithmetic(src, backdrop, dst, [k1, k2, k3, k4]);
         }
     };
 
-    filtra_kernels::composite(src, backdrop, operator, dst);
+    filtra_kernels::composite(src, backdrop, dst, operator);
 }

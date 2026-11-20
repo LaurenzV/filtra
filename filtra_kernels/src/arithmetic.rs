@@ -4,8 +4,8 @@ use crate::simd::{for_each_pixel_chunk, pack, unpack};
 use crate::{Source, Target};
 
 /// `feComposite` with `operator="arithmetic"`.
-pub fn arithmetic(src: Source<'_>, backdrop: Source<'_>, k: [f32; 4], dst: Target<'_>) {
-    dispatch!(Level::new(), simd => arithmetic_inner(simd, src, backdrop, k, dst));
+pub fn arithmetic(src: Source<'_>, backdrop: Source<'_>, dst: Target<'_>, k: [f32; 4]) {
+    dispatch!(Level::new(), simd => arithmetic_inner(simd, src, backdrop, dst, k));
 }
 
 #[inline(always)]
@@ -13,8 +13,8 @@ fn arithmetic_inner<S: Simd>(
     simd: S,
     src: Source<'_>,
     backdrop: Source<'_>,
-    k: [f32; 4],
     dst: Target<'_>,
+    k: [f32; 4],
 ) {
     let k1 = f32x8::splat(simd, k[0] / 255.0);
     let k2 = f32x8::splat(simd, k[1]);
