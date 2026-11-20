@@ -4,8 +4,7 @@ use crate::pixmap::segments;
 use crate::simd::{for_each_chunk, pack, premultiply, unpack};
 use crate::{Source, Target};
 
-/// Remaps the unpremultiplied channels of `src` with piecewise linear functions, given as the
-/// values at the start and end of equal regions of `[0, 1]`.
+/// `feComponentTransfer`, with every function given as piecewise linear segments.
 pub fn component_transfer(src: Source<'_>, dst: Target<'_>, functions: [&[[f32; 2]]; 4]) {
     dispatch!(Level::new(), simd => component_transfer_inner(simd, src, dst, functions));
 }

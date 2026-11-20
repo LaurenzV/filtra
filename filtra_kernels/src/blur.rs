@@ -5,9 +5,7 @@ use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u16x16, u32x8};
 use crate::simd::Wide;
 use crate::{IntRect, Source, Target};
 
-/// Blurs `src` with a Gaussian of the standard deviations `std_dev` along x and y, in pixels.
-///
-/// An axis whose standard deviation isn't positive isn't blurred.
+/// `feGaussianBlur` and `blur()`, with the standard deviations in pixels.
 pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
     let axes = std_dev.map(Axis::new);
 

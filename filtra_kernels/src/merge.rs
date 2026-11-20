@@ -4,7 +4,7 @@ use crate::pixmap::segments;
 use crate::simd::{Wide, combine, div255, for_each_chunk};
 use crate::{Source, Target};
 
-/// Composites `inputs` on top of each other with source over, the first one at the bottom.
+/// `feMerge`.
 pub fn merge(inputs: &[Source<'_>], dst: Target<'_>) {
     dispatch!(Level::new(), simd => merge_inner(simd, inputs, dst));
 }

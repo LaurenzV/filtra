@@ -63,7 +63,7 @@ pub enum Light {
     },
 }
 
-/// Lights the alpha of `src` as a height map, sampled at the top-left corner of each pixel.
+/// `feDiffuseLighting` and `feSpecularLighting`.
 pub fn lighting(src: Source<'_>, dst: Target<'_>, lighting: &Lighting) {
     dispatch!(Level::new(), simd => lighting_inner(simd, src, dst, lighting));
 }

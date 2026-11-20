@@ -4,7 +4,7 @@ use crate::pixmap::segments;
 use crate::simd::for_each_chunk;
 use crate::{Source, Target};
 
-/// Copies the alpha channel of `src` with black color.
+/// The `SourceAlpha` input.
 pub fn alpha(src: Source<'_>, dst: Target<'_>) {
     dispatch!(Level::new(), simd => alpha_inner(simd, src, dst));
 }
