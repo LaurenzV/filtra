@@ -13,22 +13,17 @@ pub fn morphology(
     radius: [u32; 2],
 ) {
     let [rx, ry] = radius;
+    let dilate = matches!(operator, MorphologyOperator::Dilate);
 
-    match operator {
-        MorphologyOperator::Erode => {
-            dispatch!(simd => morphology_inner::<_, false>(simd, src, dst, rx, ry));
-        }
-        MorphologyOperator::Dilate => {
-            dispatch!(simd => morphology_inner::<_, true>(simd, src, dst, rx, ry));
-        }
-    }
+    dispatch!(simd => morphology_inner(simd, dilate, src, dst, rx, ry));
 }
 
 const BAND: usize = 8;
 
 #[inline(always)]
-fn morphology_inner<S: Simd, const DILATE: bool>(
+fn morphology_inner<S: Simd>(
     simd: S,
+    dilate: bool,
     src: Source<'_>,
     dst: Target<'_>,
     rx: u32,
@@ -43,14 +38,15 @@ fn morphology_inner<S: Simd, const DILATE: bool>(
     let mut scratch = Vec::new();
 
     let target = Target::new(&mut columns, width, height, x0, rect.y0);
-    vertical::<S, DILATE>(simd, src, target, ry, &mut scratch);
+    vertical(simd, dilate, src, target, ry, &mut scratch);
     let source = Source::new(&columns, width, height, x0, rect.y0);
-    horizontal::<S, DILATE>(simd, source, dst, rx, &mut scratch);
+    horizontal(simd, dilate, source, dst, rx, &mut scratch);
 }
 
 #[inline(always)]
-fn vertical<S: Simd, const DILATE: bool>(
+fn vertical<S: Simd>(
     simd: S,
+    dilate: bool,
     src: Source<'_>,
     mut dst: Target<'_>,
     r: u32,
@@ -63,12 +59,13 @@ fn vertical<S: Simd, const DILATE: bool>(
     let len = rect.width() as usize * 4;
     let outputs = dst.rows_mut().map(|(_, row)| row);
 
-    sliding::<S, DILATE>(simd, rows, present, first, r, len, scratch, outputs);
+    sliding(simd, dilate, rows, present, first, r, len, scratch, outputs);
 }
 
 #[inline(always)]
-fn horizontal<S: Simd, const DILATE: bool>(
+fn horizontal<S: Simd>(
     simd: S,
+    dilate: bool,
     src: Source<'_>,
     mut dst: Target<'_>,
     r: u32,
@@ -100,7 +97,17 @@ fn horizontal<S: Simd, const DILATE: bool>(
         let present = (i64::from(source.x0), i64::from(source.x1));
         let outputs = results.as_chunks_mut::<{ BAND * 4 }>().0.iter_mut();
         let outputs = outputs.map(|column| column.as_mut_slice());
-        sliding::<S, DILATE>(simd, column, present, first, r, BAND * 4, scratch, outputs);
+        sliding(
+            simd,
+            dilate,
+            column,
+            present,
+            first,
+            r,
+            BAND * 4,
+            scratch,
+            outputs,
+        );
 
         let mut band = band.map(|row| row.map(|(_, row)| row));
         untranspose(simd, &results, &mut band);
@@ -109,8 +116,9 @@ fn horizontal<S: Simd, const DILATE: bool>(
 
 #[inline(always)]
 #[allow(clippy::too_many_arguments)]
-fn sliding<'i, 'o, S: Simd, const DILATE: bool>(
+fn sliding<'i, 'o, S: Simd>(
     simd: S,
+    dilate: bool,
     rows: impl Fn(i64) -> &'i [u8],
     present: (i64, i64),
     first: i64,
@@ -143,16 +151,16 @@ fn sliding<'i, 'o, S: Simd, const DILATE: bool>(
             let current = rows(lo + k as i64);
 
             if k + 1 < stored {
-                min_max::<S, DILATE>(simd, Some(current), Some(&tail[..len]), output);
+                min_max(simd, dilate, Some(current), Some(&tail[..len]), output);
             } else if hi < block + window {
-                min_max::<S, DILATE>(simd, Some(current), None, output);
+                min_max(simd, dilate, Some(current), None, output);
             } else {
                 output.copy_from_slice(current);
             }
         }
 
         let suffix = |i: i64| {
-            let transparent = i >= hi || stored == 0 || (i < lo && !DILATE);
+            let transparent = i >= hi || stored == 0 || (i < lo && !dilate);
             (!transparent).then(|| &suffixes[(i.max(lo) - lo) as usize * len..][..len])
         };
         let mut covered = Prefix::Empty;
@@ -165,7 +173,7 @@ fn sliding<'i, 'o, S: Simd, const DILATE: bool>(
             if j > 0 {
                 covered = match (row(block + window + j - 1), covered) {
                     (Some(current), Prefix::Rows) => {
-                        accumulate::<S, DILATE>(simd, Some(current), prefix);
+                        accumulate(simd, dilate, Some(current), prefix);
                         Prefix::Rows
                     }
                     (Some(current), Prefix::Empty) => {
@@ -173,14 +181,14 @@ fn sliding<'i, 'o, S: Simd, const DILATE: bool>(
                         Prefix::Rows
                     }
                     (_, Prefix::Transparent) => Prefix::Transparent,
-                    (None, covered) if DILATE => covered,
+                    (None, covered) if dilate => covered,
                     (None, _) => Prefix::Transparent,
                 };
             }
 
             match covered {
                 Prefix::Empty => assign(suffix(block + j), output),
-                Prefix::Rows => min_max::<S, DILATE>(simd, suffix(block + j), Some(prefix), output),
+                Prefix::Rows => min_max(simd, dilate, suffix(block + j), Some(prefix), output),
                 Prefix::Transparent => output.fill(0),
             }
         }
@@ -204,7 +212,27 @@ fn assign(row: Option<&[u8]>, output: &mut [u8]) {
 }
 
 #[inline(always)]
-fn accumulate<S: Simd, const DILATE: bool>(simd: S, row: Option<&[u8]>, output: &mut [u8]) {
+fn accumulate<S: Simd>(simd: S, dilate: bool, row: Option<&[u8]>, output: &mut [u8]) {
+    // Only these small loops are specialized for the operator, so that the rest of the kernel
+    // exists once.
+    if dilate {
+        accumulate_with::<S, true>(simd, row, output);
+    } else {
+        accumulate_with::<S, false>(simd, row, output);
+    }
+}
+
+#[inline(always)]
+fn min_max<S: Simd>(simd: S, dilate: bool, a: Option<&[u8]>, b: Option<&[u8]>, output: &mut [u8]) {
+    if dilate {
+        min_max_with::<S, true>(simd, a, b, output);
+    } else {
+        min_max_with::<S, false>(simd, a, b, output);
+    }
+}
+
+#[inline(always)]
+fn accumulate_with<S: Simd, const DILATE: bool>(simd: S, row: Option<&[u8]>, output: &mut [u8]) {
     for_each_chunk([row], output, {
         #[inline(always)]
         |_, [row]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
@@ -215,7 +243,7 @@ fn accumulate<S: Simd, const DILATE: bool>(simd: S, row: Option<&[u8]>, output: 
 }
 
 #[inline(always)]
-fn min_max<S: Simd, const DILATE: bool>(
+fn min_max_with<S: Simd, const DILATE: bool>(
     simd: S,
     a: Option<&[u8]>,
     b: Option<&[u8]>,
