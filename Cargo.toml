@@ -7,3 +7,10 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.89"
 license = "Apache-2.0 OR MIT"
+repository = "https://github.com/LaurenzV/filtra"
+
+[workspace.dependencies]
+filtra = { version = "0.1.0", path = "filtra" }
+filtra_kernels = { version = "0.1.0", path = "filtra_kernels", default-features = false }
+filtra_plan = { version = "0.1.0", path = "filtra_plan", default-features = false }
+filtra_types = { version = "0.1.0", path = "filtra_types", default-features = false }

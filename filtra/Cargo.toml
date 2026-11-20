@@ -1,15 +1,21 @@
 [package]
 name = "filtra"
 description = "Applies SVG and CSS filter effects to pixmaps."
+categories = ["graphics", "rendering", "multimedia::images"]
+keywords = ["svg", "css", "filter", "image", "simd"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
-filtra_kernels = { path = "../filtra_kernels", default-features = false }
-filtra_types = { path = "../filtra_types", default-features = false }
-filtra_plan = { path = "../filtra_plan", default-features = false }
+filtra_kernels = { workspace = true }
+filtra_types = { workspace = true }
+filtra_plan = { workspace = true }
 
 [features]
 default = ["all"]

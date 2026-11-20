@@ -1,10 +1,16 @@
 [package]
 name = "filtra_types"
 description = "Types describing SVG and CSS filter effects."
+categories = ["graphics", "rendering"]
+keywords = ["svg", "css", "filter"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 

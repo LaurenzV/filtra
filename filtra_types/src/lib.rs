@@ -1,4 +1,7 @@
 //! Types describing SVG and CSS filter effects.
+//!
+//! This crate provides the vocabulary to describe filter primitives and the chains and graphs they
+//! form, as defined in [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/).
 
 #![no_std]
 
