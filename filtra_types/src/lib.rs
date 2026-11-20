@@ -4,6 +4,7 @@
 //! form, as defined in [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/).
 
 #![no_std]
+#![forbid(unsafe_code)]
 
 extern crate alloc;
 

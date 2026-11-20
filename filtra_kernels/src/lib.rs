@@ -7,6 +7,8 @@
 //! [`Source::new`] and the output with [`Target::new`]. A kernel writes every pixel of its target;
 //! pixels outside of an input are transparent black.
 
+#![forbid(unsafe_code)]
+
 mod alpha;
 #[cfg(feature = "composite")]
 mod arithmetic;

@@ -29,6 +29,8 @@
 //! filtra::apply(&mut backend, &filter, pixmap, transform, |_, _, _, _| {});
 //! ```
 
+#![forbid(unsafe_code)]
+
 pub mod cpu;
 
 pub use filtra_plan as plan;
