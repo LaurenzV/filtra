@@ -1,7 +1,6 @@
 use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u16x16};
 
-use crate::pixmap::segments;
-use crate::simd::{Wide, combine, div255, for_each_chunk};
+use crate::simd::{Wide, combine, div255, for_each_pixel_chunk};
 use crate::{Source, Target};
 
 /// A Porter-Duff compositing operator.
@@ -32,32 +31,25 @@ fn composite_inner<S: Simd>(
     src: Source<'_>,
     backdrop: Source<'_>,
     operator: PorterDuff,
-    mut dst: Target<'_>,
+    dst: Target<'_>,
 ) {
-    let rect = dst.rect();
+    let inputs = [src, backdrop];
 
-    for (y, row) in dst.rows_mut() {
-        for (x0, x1) in segments(rect.x0, rect.x1, [src.rect(), backdrop.rect()].into_iter()) {
-            let output = &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4];
-            let inputs = [src.row(y, x0, x1), backdrop.row(y, x0, x1)];
-
-            match operator {
-                PorterDuff::Over => over(simd, inputs, output),
-                PorterDuff::In => in_(simd, inputs, output),
-                PorterDuff::Out => out(simd, inputs, output),
-                PorterDuff::Atop => atop(simd, inputs, output),
-                PorterDuff::Xor => xor(simd, inputs, output),
-                PorterDuff::Lighter => lighter(simd, inputs, output),
-            }
-        }
+    match operator {
+        PorterDuff::Over => over(simd, inputs, dst),
+        PorterDuff::In => in_(simd, inputs, dst),
+        PorterDuff::Out => out(simd, inputs, dst),
+        PorterDuff::Atop => atop(simd, inputs, dst),
+        PorterDuff::Xor => xor(simd, inputs, dst),
+        PorterDuff::Lighter => lighter(simd, inputs, dst),
     }
 }
 
 macro_rules! porter_duff {
     ($name:ident, |$cs:ident, $sa:ident, $cb:ident, $ba:ident| $formula:expr) => {
         #[inline(always)]
-        fn $name<S: Simd>(simd: S, inputs: [Option<&[u8]>; 2], output: &mut [u8]) {
-            porter_duff(simd, inputs, output, {
+        fn $name<S: Simd>(simd: S, inputs: [Source<'_>; 2], dst: Target<'_>) {
+            porter_duff(simd, inputs, dst, {
                 #[inline(always)]
                 #[allow(unused_variables, reason = "Not every operator uses every input.")]
                 |$cs, $sa, $cb, $ba| $formula
@@ -75,8 +67,8 @@ porter_duff!(xor, |cs, sa, cb, ba| div255(
 ));
 
 #[inline(always)]
-fn lighter<S: Simd>(simd: S, inputs: [Option<&[u8]>; 2], output: &mut [u8]) {
-    for_each_chunk(inputs, output, {
+fn lighter<S: Simd>(simd: S, inputs: [Source<'_>; 2], dst: Target<'_>) {
+    for_each_pixel_chunk(inputs, dst, {
         #[inline(always)]
         |[s, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
             u8x32::from_slice(simd, s)
@@ -89,11 +81,11 @@ fn lighter<S: Simd>(simd: S, inputs: [Option<&[u8]>; 2], output: &mut [u8]) {
 #[inline(always)]
 fn porter_duff<S: Simd>(
     simd: S,
-    inputs: [Option<&[u8]>; 2],
-    output: &mut [u8],
+    inputs: [Source<'_>; 2],
+    dst: Target<'_>,
     f: impl Fn(u16x16<S>, u16x16<S>, u16x16<S>, u16x16<S>) -> u16x16<S> + Copy,
 ) {
-    for_each_chunk(inputs, output, {
+    for_each_pixel_chunk(inputs, dst, {
         #[inline(always)]
         |[s, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
             combine(Wide::load(simd, s), Wide::load(simd, b), f).store(output);

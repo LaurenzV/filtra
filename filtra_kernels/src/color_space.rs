@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::pixmap::segments;
+use crate::pixmap::for_each_segment;
 use crate::{Source, Target};
 
 /// The color space of a pixmap's color values.
@@ -14,32 +14,29 @@ pub enum ColorSpace {
 
 /// The conversion between the color spaces of `color-interpolation-filters`.
 pub fn convert(src: Source<'_>, mut dst: Target<'_>, from: ColorSpace, to: ColorSpace) {
-    let rect = dst.rect();
     let table = (from != to).then(|| table(to == ColorSpace::LinearRgb));
 
-    for (y, row) in dst.rows_mut() {
-        for (x0, x1) in segments(rect.x0, rect.x1, [src.rect()].into_iter()) {
-            let output = &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4];
+    for_each_segment(
+        &mut dst,
+        [src.rect()].into_iter(),
+        |y, x0, x1, output| match (src.row(y, x0, x1), table) {
+            (None, _) => output.fill(0),
+            (Some(source), None) => output.copy_from_slice(source),
+            (Some(source), Some(table)) => {
+                let output = output.as_chunks_mut::<4>().0;
 
-            match (src.row(y, x0, x1), table) {
-                (None, _) => output.fill(0),
-                (Some(source), None) => output.copy_from_slice(source),
-                (Some(source), Some(table)) => {
-                    let output = output.as_chunks_mut::<4>().0;
-
-                    for (output, source) in output.iter_mut().zip(source.as_chunks::<4>().0) {
-                        let results = &table[usize::from(source[3])];
-                        *output = [
-                            results[usize::from(source[0])],
-                            results[usize::from(source[1])],
-                            results[usize::from(source[2])],
-                            source[3],
-                        ];
-                    }
+                for (output, source) in output.iter_mut().zip(source.as_chunks::<4>().0) {
+                    let results = &table[usize::from(source[3])];
+                    *output = [
+                        results[usize::from(source[0])],
+                        results[usize::from(source[1])],
+                        results[usize::from(source[2])],
+                        source[3],
+                    ];
                 }
             }
-        }
-    }
+        },
+    );
 }
 
 // One exact result for every combination of alpha (outer index) and premultiplied color value.

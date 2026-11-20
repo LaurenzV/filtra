@@ -212,7 +212,7 @@ fn assign(row: Option<&[u8]>, output: &mut [u8]) {
 fn accumulate<S: Simd, const DILATE: bool>(simd: S, row: Option<&[u8]>, output: &mut [u8]) {
     for_each_chunk([row], output, {
         #[inline(always)]
-        |[row]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
+        |_, [row]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
             let current = u8x32::from_slice(simd, output);
             apply::<S, DILATE>(current, u8x32::from_slice(simd, row)).store_slice(output);
         }
@@ -228,7 +228,7 @@ fn combine<S: Simd, const DILATE: bool>(
 ) {
     for_each_chunk([a, b], output, {
         #[inline(always)]
-        |[a, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
+        |_, [a, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
             let (a, b) = (u8x32::from_slice(simd, a), u8x32::from_slice(simd, b));
             apply::<S, DILATE>(a, b).store_slice(output);
         }

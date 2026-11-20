@@ -303,7 +303,27 @@ impl Layout {
 }
 
 #[inline(always)]
-pub(crate) fn segments(
+pub(crate) fn for_each_segment(
+    dst: &mut Target<'_>,
+    rects: impl Iterator<Item = IntRect> + Clone,
+    mut f: impl FnMut(i32, i32, i32, &mut [u8]),
+) {
+    let rect = dst.rect();
+
+    for (y, row) in dst.rows_mut() {
+        for (x0, x1) in segments(rect.x0, rect.x1, rects.clone()) {
+            f(
+                y,
+                x0,
+                x1,
+                &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4],
+            );
+        }
+    }
+}
+
+#[inline(always)]
+fn segments(
     x0: i32,
     x1: i32,
     rects: impl Iterator<Item = IntRect> + Clone,

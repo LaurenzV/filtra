@@ -2,6 +2,9 @@ use core::f32::consts::LN_2;
 
 use fearless_simd::{Simd, SimdCvtFloat, f32x8, i32x8, prelude::*, u8x32, u16x16, u32x8};
 
+use crate::pixmap::for_each_segment;
+use crate::{Source, Target};
+
 // Every byte stays in the 32-bit lane of its pixel, which avoids shuffles on x86.
 #[derive(Clone, Copy)]
 pub(crate) struct Wide<S: Simd> {
@@ -66,7 +69,7 @@ pub(crate) fn div255<S: Simd>(x: u16x16<S>) -> u16x16<S> {
 pub(crate) fn for_each_chunk<const N: usize>(
     inputs: [Option<&[u8]>; N],
     output: &mut [u8],
-    mut f: impl FnMut([&[u8; 32]; N], &mut [u8; 32]),
+    mut f: impl FnMut(usize, [&[u8; 32]; N], &mut [u8; 32]),
 ) {
     let (full, tail) = output.as_chunks_mut::<32>();
     // A missing input has no chunks, so its padded chunk stays transparent.
@@ -86,12 +89,31 @@ pub(crate) fn for_each_chunk<const N: usize>(
 
     for i in 0..full.len() + usize::from(!tail.is_empty()) {
         let chunks = core::array::from_fn(|k| inputs[k].0.get(i).unwrap_or(&padded_inputs[k]));
-        f(chunks, full.get_mut(i).unwrap_or(&mut padded_output));
+        f(i, chunks, full.get_mut(i).unwrap_or(&mut padded_output));
     }
 
     if !tail.is_empty() {
         tail.copy_from_slice(&padded_output[..tail.len()]);
     }
+}
+
+#[inline(always)]
+pub(crate) fn for_each_pixel_chunk<const N: usize>(
+    inputs: [Source<'_>; N],
+    mut dst: Target<'_>,
+    mut f: impl FnMut([&[u8; 32]; N], &mut [u8; 32]),
+) {
+    for_each_segment(&mut dst, inputs.iter().map(Source::rect), {
+        #[inline(always)]
+        |y, x0, x1, output| {
+            let rows = core::array::from_fn(|k| inputs[k].row(y, x0, x1));
+
+            for_each_chunk(rows, output, {
+                #[inline(always)]
+                |_, chunks, output| f(chunks, output)
+            });
+        }
+    });
 }
 
 #[inline(always)]

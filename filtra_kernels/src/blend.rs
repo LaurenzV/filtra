@@ -1,7 +1,6 @@
 use fearless_simd::{Level, Select, Simd, dispatch, f32x8, prelude::*, u16x16, u32x8};
 
-use crate::pixmap::segments;
-use crate::simd::{Wide, div255, for_each_chunk, pack, unpack, unpremultiply};
+use crate::simd::{Wide, div255, for_each_pixel_chunk, pack, unpack, unpremultiply};
 use crate::{Source, Target};
 
 /// A blend mode from Compositing and Blending Level 1.
@@ -55,10 +54,7 @@ pub fn blend(
     // debug builds small.
     macro_rules! blend_with {
         ($mode:ident) => {
-            dispatch!(level, simd => blend_rows(simd, src, backdrop, composite, dst, {
-                #[inline(always)]
-                |simd, inputs, composite, output| $mode(simd, inputs, composite, output)
-            }))
+            dispatch!(level, simd => $mode(simd, [src, backdrop], composite, dst))
         };
     }
 
@@ -82,32 +78,11 @@ pub fn blend(
     }
 }
 
-#[inline(always)]
-fn blend_rows<S: Simd>(
-    simd: S,
-    src: Source<'_>,
-    backdrop: Source<'_>,
-    composite: bool,
-    mut dst: Target<'_>,
-    mode: impl Fn(S, [Option<&[u8]>; 2], bool, &mut [u8]),
-) {
-    let rect = dst.rect();
-
-    for (y, row) in dst.rows_mut() {
-        for (x0, x1) in segments(rect.x0, rect.x1, [src.rect(), backdrop.rect()].into_iter()) {
-            let output = &mut row[(x0 - rect.x0) as usize * 4..(x1 - rect.x0) as usize * 4];
-            let inputs = [src.row(y, x0, x1), backdrop.row(y, x0, x1)];
-
-            mode(simd, inputs, composite, output);
-        }
-    }
-}
-
 macro_rules! integer_mode {
     ($name:ident, |$cs:ident, $sa:ident, $cb:ident, $ba:ident| $mixed:expr) => {
         #[inline(always)]
-        fn $name<S: Simd>(simd: S, inputs: [Option<&[u8]>; 2], composite: bool, output: &mut [u8]) {
-            integer(simd, inputs, composite, output, {
+        fn $name<S: Simd>(simd: S, inputs: [Source<'_>; 2], composite: bool, dst: Target<'_>) {
+            integer(simd, inputs, composite, dst, {
                 #[inline(always)]
                 #[allow(unused_variables, reason = "Not every mode uses every input.")]
                 |$cs, $sa, $cb, $ba| $mixed
@@ -119,8 +94,8 @@ macro_rules! integer_mode {
 macro_rules! float_mode {
     ($name:ident, |$s:ident, $b:ident| $mixed:expr) => {
         #[inline(always)]
-        fn $name<S: Simd>(simd: S, inputs: [Option<&[u8]>; 2], composite: bool, output: &mut [u8]) {
-            float(simd, inputs, composite, output, {
+        fn $name<S: Simd>(simd: S, inputs: [Source<'_>; 2], composite: bool, dst: Target<'_>) {
+            float(simd, inputs, composite, dst, {
                 #[inline(always)]
                 |$s, $b| $mixed
             });
@@ -182,9 +157,9 @@ float_mode!(luminosity, |s, b| {
 #[inline(always)]
 fn integer<S: Simd>(
     simd: S,
-    inputs: [Option<&[u8]>; 2],
+    inputs: [Source<'_>; 2],
     composite: bool,
-    output: &mut [u8],
+    dst: Target<'_>,
     mixed: impl Fn(u16x16<S>, u16x16<S>, u16x16<S>, u16x16<S>) -> u16x16<S> + Copy,
 ) {
     let backdrop = u16x16::splat(simd, if composite { u16::MAX } else { 0 });
@@ -198,7 +173,7 @@ fn integer<S: Simd>(
         }
     };
 
-    for_each_chunk(inputs, output, {
+    for_each_pixel_chunk(inputs, dst, {
         #[inline(always)]
         |[s, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
             let (s, b) = (Wide::load(simd, s), Wide::load(simd, b));
@@ -219,14 +194,14 @@ fn integer<S: Simd>(
 #[inline(always)]
 fn float<S: Simd>(
     simd: S,
-    inputs: [Option<&[u8]>; 2],
+    inputs: [Source<'_>; 2],
     composite: bool,
-    output: &mut [u8],
+    dst: Target<'_>,
     mixed: impl Fn([f32x8<S>; 4], [f32x8<S>; 4]) -> [f32x8<S>; 3] + Copy,
 ) {
     let backdrop = if composite { 1.0 } else { 0.0 };
 
-    for_each_chunk(inputs, output, {
+    for_each_pixel_chunk(inputs, dst, {
         #[inline(always)]
         |[s, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
             let (s, b) = (unpack(simd, s), unpack(simd, b));
