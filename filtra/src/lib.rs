@@ -1,8 +1,8 @@
 //! Applies SVG and CSS filter effects to pixmaps.
 //!
-//! This crate provides a CPU renderer for arbitrary filter graphs, as defined in
-//! [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/), with SIMD kernels
-//! for NEON, AVX2 and WebAssembly.
+//! This crate applies arbitrary filter graphs, as defined in
+//! [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/), with any
+//! [`Backend`]. It provides [`cpu::Backend`], with SIMD kernels for NEON, AVX2 and WebAssembly.
 //!
 //! # Example
 //!
@@ -10,7 +10,8 @@
 //!
 //! ```
 //! use filtra::types::{Filter, GaussianBlur, Input, Merge, Node, Offset, Primitive, Rect};
-//! use filtra::{BufferPool, Pixmap, Transform};
+//! use filtra::Transform;
+//! use filtra::cpu::{self, Pixmap};
 //!
 //! let mut filter = Filter::<()>::new(Rect::new(0.0, 0.0, 100.0, 100.0));
 //! let blur = GaussianBlur { std_dev_x: 4.0, std_dev_y: 4.0, ..Default::default() };
@@ -22,30 +23,47 @@
 //! // The content, rendered at twice its size.
 //! let mut pixmap = Pixmap::new(200, 200);
 //! let transform = Transform::new(2.0, 2.0, 0.0, 0.0);
-//! let mut pool = BufferPool::new(4);
+//! let mut backend = cpu::Backend::new(4);
 //!
-//! filtra::apply(&filter, pixmap.as_mut(), transform, &mut pool, |_, _, _, _| {});
+//! filtra::apply(&mut backend, &filter, pixmap.as_mut(), transform, |_, _, _, _| {});
 //! ```
 
-mod buffer_pool;
-mod cpu;
+pub mod cpu;
 
-pub use buffer_pool::BufferPool;
-pub use filtra_kernels::{IntRect, Pixmap, PixmapMut};
-pub use filtra_plan::Transform;
+pub use filtra_plan as plan;
+pub use filtra_plan::{IntRect, Transform};
 pub use filtra_types as types;
 
-/// Applies `filter` to `pixmap` in place, with `transform` mapping user space to its pixels.
-pub fn apply<I>(
+use filtra_plan::Plan;
+
+/// Executes the plans of filters.
+pub trait Backend {
+    /// The image that filters are applied to.
+    type Target<'a>;
+    /// The memory that the content of an `feImage` node is rendered into.
+    type Image<'a>;
+
+    /// The pixels `target` covers.
+    fn bounds(target: &Self::Target<'_>) -> IntRect;
+
+    /// Executes `plan` on `target`, rendering each `feImage` node with `render_image`.
+    fn execute(
+        &mut self,
+        plan: &Plan,
+        target: Self::Target<'_>,
+        render_image: impl FnMut(usize, IntRect, Self::Image<'_>),
+    );
+}
+
+/// Applies `filter` to `target` in place, with `transform` mapping user space to its pixels.
+pub fn apply<B: Backend, I>(
+    backend: &mut B,
     filter: &types::Filter<I>,
-    pixmap: PixmapMut<'_>,
+    target: B::Target<'_>,
     transform: Transform,
-    pool: &mut BufferPool,
-    mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
+    mut render_image: impl FnMut(&I, types::Rect, IntRect, B::Image<'_>),
 ) {
-    let bounds = pixmap.bounds();
-    let bounds = filtra_plan::IntRect::new(bounds.x0, bounds.y0, bounds.x1, bounds.y1);
-    let plan = filtra_plan::plan(filter, transform, bounds);
+    let plan = filtra_plan::plan(filter, transform, B::bounds(&target));
     let images: Vec<(&I, types::Rect)> = (filter.nodes().iter())
         .zip(filter.subregions())
         .filter_map(|(node, subregion)| match &node.primitive {
@@ -54,7 +72,7 @@ pub fn apply<I>(
         })
         .collect();
 
-    cpu::execute(&plan, pixmap, pool, &mut |image, rect, data| {
+    backend.execute(&plan, target, |image, rect, data| {
         let (image, subregion) = images[image];
         render_image(image, subregion, rect, data);
     });

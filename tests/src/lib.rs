@@ -26,10 +26,11 @@ mod tile;
 mod transform;
 mod turbulence;
 
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use filtra::Transform;
+use filtra::{Transform, cpu};
 use vello_cpu::color::palette::css::WHITE;
 use vello_cpu::kurbo::{Affine, Rect};
 use vello_cpu::peniko::color::AlphaColor;
@@ -84,10 +85,10 @@ fn check_at(name: &str, scale: u32) {
     }
 }
 
-fn render(document: &Document, scale: u32) -> filtra::Pixmap {
+fn render(document: &Document, scale: u32) -> cpu::Pixmap {
     let (width, height) = (document.width * scale, document.height * scale);
     let scale_transform = Affine::scale(f64::from(scale));
-    let mut pixmap = filtra::Pixmap::from_data(
+    let mut pixmap = cpu::Pixmap::from_data(
         rasterize(&document.shapes, width, height, scale_transform),
         width,
         height,
@@ -95,12 +96,12 @@ fn render(document: &Document, scale: u32) -> filtra::Pixmap {
 
     if let Some(filter) = &document.filter {
         let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
-        POOL.with_borrow_mut(|pool| {
+        BACKEND.with_borrow_mut(|backend| {
             filtra::apply(
+                backend,
                 filter,
                 pixmap.as_mut(),
                 transform,
-                pool,
                 |shapes, subregion, rect, data| {
                     // Like `<use>`, a referenced element is placed at the subregion's origin.
                     let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
@@ -120,7 +121,7 @@ fn render(document: &Document, scale: u32) -> filtra::Pixmap {
 
 thread_local! {
     // Shared between tests, so that they run on buffers that hold the images of other tests.
-    static POOL: std::cell::RefCell<filtra::BufferPool> = std::cell::RefCell::new(filtra::BufferPool::new(4));
+    static BACKEND: RefCell<cpu::Backend> = RefCell::new(cpu::Backend::new(4));
 }
 
 fn draw_over(data: &mut [u8], image: &[u8]) {
@@ -160,7 +161,7 @@ fn rasterize(shapes: &[Shape], width: u32, height: u32, transform: Affine) -> Ve
     target.data_as_u8_slice().to_vec()
 }
 
-fn on_white(result: filtra::Pixmap) -> Pixmap {
+fn on_white(result: cpu::Pixmap) -> Pixmap {
     let (width, height) = (result.width() as u16, result.height() as u16);
     let data = result.into_data();
     let image = Pixmap::from_parts(data, width, height, PixelMetadata::default());

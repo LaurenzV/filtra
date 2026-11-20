@@ -17,7 +17,7 @@ you need enabled.
 
 | Crate | | |
 |---|---|---|
-| [`filtra`](filtra) | Applies filters to pixmaps on the CPU. | [![crates.io](https://img.shields.io/crates/v/filtra.svg)](https://crates.io/crates/filtra) [![docs.rs](https://img.shields.io/docsrs/filtra.svg)](https://docs.rs/filtra) |
+| [`filtra`](filtra) | Applies filters with any backend, and provides a CPU backend. | [![crates.io](https://img.shields.io/crates/v/filtra.svg)](https://crates.io/crates/filtra) [![docs.rs](https://img.shields.io/docsrs/filtra.svg)](https://docs.rs/filtra) |
 | [`filtra_types`](filtra_types) | Types describing filter graphs. | [![crates.io](https://img.shields.io/crates/v/filtra_types.svg)](https://crates.io/crates/filtra_types) [![docs.rs](https://img.shields.io/docsrs/filtra_types.svg)](https://docs.rs/filtra_types) |
 | [`filtra_plan`](filtra_plan) | Turns a filter into backend-independent steps on pixel images. | [![crates.io](https://img.shields.io/crates/v/filtra_plan.svg)](https://crates.io/crates/filtra_plan) [![docs.rs](https://img.shields.io/docsrs/filtra_plan.svg)](https://docs.rs/filtra_plan) |
 | [`filtra_kernels`](filtra_kernels) | The CPU kernels that execute the steps. | [![crates.io](https://img.shields.io/crates/v/filtra_kernels.svg)](https://crates.io/crates/filtra_kernels) [![docs.rs](https://img.shields.io/docsrs/filtra_kernels.svg)](https://docs.rs/filtra_kernels) |
