@@ -1,21 +1,10 @@
-use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+use fearless_simd::{Simd, f32x8, prelude::*};
 
 use crate::simd::{for_each_pixel_chunk, pack, unpack};
 use crate::{Source, Target};
 
-/// `feComposite` with `operator="arithmetic"`.
-pub fn arithmetic(src: Source<'_>, backdrop: Source<'_>, dst: Target<'_>, k: [f32; 4]) {
-    dispatch!(Level::new(), simd => arithmetic_inner(simd, src, backdrop, dst, k));
-}
-
 #[inline(always)]
-fn arithmetic_inner<S: Simd>(
-    simd: S,
-    src: Source<'_>,
-    backdrop: Source<'_>,
-    dst: Target<'_>,
-    k: [f32; 4],
-) {
+pub(crate) fn arithmetic<S: Simd>(simd: S, inputs: [Source<'_>; 2], dst: Target<'_>, k: [f32; 4]) {
     let k1 = f32x8::splat(simd, k[0] / 255.0);
     let k2 = f32x8::splat(simd, k[1]);
     let k3 = f32x8::splat(simd, k[2]);
@@ -26,7 +15,7 @@ fn arithmetic_inner<S: Simd>(
         |i1: f32x8<S>, i2: f32x8<S>| (k1 * i1).mul_add(i2, k2.mul_add(i1, k3.mul_add(i2, k4)))
     };
 
-    for_each_pixel_chunk([src, backdrop], dst, {
+    for_each_pixel_chunk(inputs, dst, {
         #[inline(always)]
         |[s, b]: [&[u8; 32]; 2], output: &mut [u8; 32]| {
             let [sr, sg, sb, sa] = unpack(simd, s);

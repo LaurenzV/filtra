@@ -1,20 +1,8 @@
 use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
+use filtra_types::EdgeMode;
 
 use crate::simd::{for_each_chunk, pack, premultiply, unpack, unpremultiply};
 use crate::{IntRect, Source, Target};
-
-/// How [`convolve_matrix`] extends its input beyond the edges of the target.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum EdgeMode {
-    /// Repeats the pixels at the edges.
-    Duplicate,
-    /// Takes the pixels from the opposite edge.
-    Wrap,
-    /// Takes the pixels mirrored across the edges.
-    Mirror,
-    /// Extends with transparent black.
-    None,
-}
 
 /// The parameters of [`convolve_matrix`].
 #[derive(Debug, Clone, Copy)]

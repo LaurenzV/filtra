@@ -1,16 +1,8 @@
 use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u32x8};
+use filtra_types::MorphologyOperator;
 
 use crate::simd::for_each_chunk;
 use crate::{Pixmap, Source, Target};
-
-/// Whether [`morphology`] takes the minimum or the maximum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MorphologyOperator {
-    /// The component-wise minimum (`erode`).
-    Erode,
-    /// The component-wise maximum (`dilate`).
-    Dilate,
-}
 
 /// `feMorphology`, with the radii in pixels.
 pub fn morphology(

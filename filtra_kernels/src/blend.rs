@@ -1,44 +1,8 @@
 use fearless_simd::{Level, Select, Simd, dispatch, f32x8, prelude::*, u16x16, u32x8};
+use filtra_types::BlendMode;
 
 use crate::simd::{Wide, div255, for_each_pixel_chunk, pack, unpack, unpremultiply};
 use crate::{Source, Target};
-
-/// A blend mode from Compositing and Blending Level 1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BlendMode {
-    /// `normal`.
-    Normal,
-    /// `multiply`.
-    Multiply,
-    /// `screen`.
-    Screen,
-    /// `overlay`.
-    Overlay,
-    /// `darken`.
-    Darken,
-    /// `lighten`.
-    Lighten,
-    /// `color-dodge`.
-    ColorDodge,
-    /// `color-burn`.
-    ColorBurn,
-    /// `hard-light`.
-    HardLight,
-    /// `soft-light`.
-    SoftLight,
-    /// `difference`.
-    Difference,
-    /// `exclusion`.
-    Exclusion,
-    /// `hue`.
-    Hue,
-    /// `saturation`.
-    Saturation,
-    /// `color`.
-    Color,
-    /// `luminosity`.
-    Luminosity,
-}
 
 /// `feBlend` and `mix-blend-mode`.
 pub fn blend(
