@@ -44,12 +44,10 @@ use svg::{Document, Shape};
 /// Set to write the results as the new references instead of comparing with them.
 const REPLACE: &str = "FILTRA_REPLACE";
 
-/// Checks the test `name`, for example `flood/subregion`, against its reference.
 fn check(name: &str) {
     check_at(name, 1);
 }
 
-/// Checks the test `name`, rendered at `scale` times its size, against its reference.
 fn check_at(name: &str, scale: u32) {
     let text = std::fs::read_to_string(path(&format!("svg/{name}.svg"))).unwrap();
     let actual = on_white(render(&svg::parse(&text), scale));

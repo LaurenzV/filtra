@@ -284,7 +284,6 @@ fn color_matrix(node: XmlNode<'_, '_>) -> ColorMatrix {
     }
 }
 
-/// `radius` with one number for both axes or two; anything else is the initial 0 (§9.17).
 fn color_channel(node: XmlNode<'_, '_>, name: &str) -> ColorChannel {
     match node.attribute(name).unwrap_or("A") {
         "R" => ColorChannel::R,
@@ -296,6 +295,7 @@ fn color_channel(node: XmlNode<'_, '_>, name: &str) -> ColorChannel {
 }
 
 fn morphology(node: XmlNode<'_, '_>) -> Morphology {
+    // One number for both axes or two; anything else is the initial 0 (§9.17).
     let radius = node.attribute("radius").map(numbers).unwrap_or_default();
     let (radius_x, radius_y) = match *radius.as_slice() {
         [r] => (r, r),

@@ -42,7 +42,7 @@ impl<I> Filter<I> {
         Input::Result(count)
     }
 
-    /// The primitives in document order; the result of the last one is the filter's result.
+    /// The nodes in document order.
     pub fn nodes(&self) -> &[Node<I>] {
         &self.nodes
     }
@@ -159,7 +159,7 @@ impl Subregion {
     }
 }
 
-/// A rectangle in user space, empty if its width or height is zero or negative.
+/// A rectangle in user space.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rect {
     /// The left edge.

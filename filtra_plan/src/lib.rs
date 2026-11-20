@@ -248,13 +248,13 @@ pub enum Step {
         origin: [f32; 2],
     },
     #[cfg(feature = "gaussian-blur")]
-    /// Blurs an image with a Gaussian, treating it as transparent beyond its edges.
+    /// Blurs an image with a Gaussian.
     GaussianBlur {
         /// The source.
         src: ImageId,
         /// The destination.
         dst: ImageId,
-        /// The standard deviations along x and y in pixels; an axis with zero isn't blurred.
+        /// The standard deviations along x and y in pixels.
         std_dev: [f32; 2],
     },
 }

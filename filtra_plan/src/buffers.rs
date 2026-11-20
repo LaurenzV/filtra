@@ -1,8 +1,6 @@
 use crate::{ImageId, IntRect, Pass};
 
 /// Assigns the images of `passes`, which cover `rects`, to as few buffers as possible.
-///
-/// Images that no pass writes, like [`Plan::source`](crate::Plan::source), get no buffer.
 pub fn assign_buffers<P: Pass>(passes: &[P], rects: &[IntRect], output: ImageId) -> Buffers {
     // The reads of all passes, each pass's ending at its entry in `ends`.
     let mut reads = Vec::new();

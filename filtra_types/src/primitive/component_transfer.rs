@@ -24,19 +24,11 @@ pub enum TransferFunction {
     /// A step function with one step per value, spread evenly over `[0, 1]`.
     Discrete(Vec<f32>),
     /// `slope * C + intercept`.
-    Linear {
-        ///.
-        slope: f32,
-        ///.
-        intercept: f32,
-    },
+    Linear { slope: f32, intercept: f32 },
     /// `amplitude * pow(C, exponent) + offset`.
     Gamma {
-        ///.
         amplitude: f32,
-        ///.
         exponent: f32,
-        ///.
         offset: f32,
     },
 }
