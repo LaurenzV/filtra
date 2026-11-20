@@ -1,10 +1,11 @@
 //! The CPU backend.
 
 mod executor;
+mod pixmap;
 
 use std::cmp::Reverse;
 
-pub use filtra_kernels::{Pixmap, PixmapMut};
+pub use pixmap::PixmapMut;
 
 use crate::IntRect;
 use filtra_plan::Plan;
@@ -59,8 +60,7 @@ impl crate::Backend for Backend {
     type Image<'a> = &'a mut [u8];
 
     fn bounds(target: &PixmapMut<'_>) -> IntRect {
-        let bounds = target.bounds();
-        IntRect::new(bounds.x0, bounds.y0, bounds.x1, bounds.y1)
+        target.bounds()
     }
 
     fn execute(

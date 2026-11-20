@@ -4,8 +4,8 @@
 //! [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/).
 //!
 //! Kernels work in a single coordinate space, in which every input is placed with
-//! [`Pixmap::source`] and the output with [`Pixmap::target`]. A kernel writes every pixel of its
-//! target; pixels outside of an input are transparent black.
+//! [`Source::new`] and the output with [`Target::new`]. A kernel writes every pixel of its target;
+//! pixels outside of an input are transparent black.
 
 mod alpha;
 #[cfg(feature = "composite")]
@@ -68,7 +68,7 @@ pub use merge::merge;
 #[cfg(feature = "morphology")]
 pub use morphology::morphology;
 pub use offset::offset;
-pub use pixmap::{Pixmap, PixmapMut, Source, Target};
+pub use pixmap::{Source, Target};
 pub use rect::IntRect;
 #[cfg(feature = "tile")]
 pub use tile::tile;

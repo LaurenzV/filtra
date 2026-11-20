@@ -2,7 +2,7 @@ use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u32x8};
 use filtra_types::MorphologyOperator;
 
 use crate::simd::for_each_chunk;
-use crate::{Pixmap, Source, Target};
+use crate::{Source, Target};
 
 /// `feMorphology`, with the radii in pixels.
 pub fn morphology(
@@ -38,11 +38,14 @@ fn morphology_inner<S: Simd, const DILATE: bool>(
     let x0 = (i64::from(rect.x0) - i64::from(rx)).max(i64::from(source.x0));
     let x1 = (i64::from(rect.x1) + i64::from(rx)).min(i64::from(source.x1));
     let (x0, x1) = (x0 as i32, x1.max(x0) as i32);
-    let mut columns = Pixmap::new((x1 - x0) as u32, rect.height());
+    let (width, height) = ((x1 - x0) as u32, rect.height());
+    let mut columns = vec![0; width as usize * height as usize * 4];
     let mut scratch = Vec::new();
 
-    vertical::<S, DILATE>(simd, src, columns.target(x0, rect.y0), ry, &mut scratch);
-    horizontal::<S, DILATE>(simd, columns.source(x0, rect.y0), dst, rx, &mut scratch);
+    let target = Target::new(&mut columns, width, height, x0, rect.y0);
+    vertical::<S, DILATE>(simd, src, target, ry, &mut scratch);
+    let source = Source::new(&columns, width, height, x0, rect.y0);
+    horizontal::<S, DILATE>(simd, source, dst, rx, &mut scratch);
 }
 
 #[inline(always)]

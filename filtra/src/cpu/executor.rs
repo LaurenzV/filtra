@@ -1,7 +1,7 @@
-use super::Backend;
+use super::{Backend, PixmapMut};
 #[cfg(feature = "convolve-matrix")]
 use filtra_kernels::Convolution;
-use filtra_kernels::{ColorSpace, IntRect, PixmapMut, Source, Target};
+use filtra_kernels::{ColorSpace, IntRect, Source, Target};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 use filtra_kernels::{Light, Lighting, Reflection};
 use filtra_plan::{ImageId, Pass, Plan, Step};
@@ -80,11 +80,13 @@ impl Store<'_> {
                 let inputs = Inputs {
                     images: &self.images,
                     buffers: &self.buffers,
-                    source: Some(self.pixmap.source(0, 0)),
+                    source: Some(self.pixmap.source()),
                 };
-                let mut pixmap =
-                    PixmapMut::from_data(sized(&mut data, rect), rect.width(), rect.height());
-                f(inputs, pixmap.target(rect.x0, rect.y0));
+                let (width, height) = (rect.width(), rect.height());
+                f(
+                    inputs,
+                    Target::new(sized(&mut data, rect), width, height, rect.x0, rect.y0),
+                );
                 self.buffers[buffer] = data;
             }
             Location::Output => self.write_pixmap(rect, f),
@@ -102,7 +104,7 @@ impl Store<'_> {
     }
 
     fn write_pixmap(&mut self, rect: IntRect, f: impl FnOnce(Inputs<'_>, Target<'_>)) {
-        let bounds = self.pixmap.bounds();
+        let bounds = self.pixmap.target().rect();
 
         for outside in [
             IntRect::new(bounds.x0, bounds.y0, bounds.x1, rect.y0),
@@ -110,7 +112,7 @@ impl Store<'_> {
             IntRect::new(bounds.x0, rect.y0, rect.x0, rect.y1),
             IntRect::new(rect.x1, rect.y0, bounds.x1, rect.y1),
         ] {
-            filtra_kernels::flood(self.pixmap.target(0, 0).clip(outside), [0; 4]);
+            filtra_kernels::flood(self.pixmap.target().clip(outside), [0; 4]);
         }
 
         let inputs = Inputs {
@@ -118,7 +120,7 @@ impl Store<'_> {
             buffers: &self.buffers,
             source: None,
         };
-        f(inputs, self.pixmap.target(0, 0).clip(rect));
+        f(inputs, self.pixmap.target().clip(rect));
     }
 }
 
