@@ -25,7 +25,7 @@ const MAX_TAPS: usize = 13;
 /// The fractional bits of a horizontal Gaussian, which leave room for the sum of two of them.
 const GAUSS_FRACTION: u32 = 6;
 
-fn blur<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, axes: &[Axis; 2]) {
+fn blur<S: Simd>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) {
     // The blur is decimated: each axis is halved with [1, 3, 3, 1] / 8 until a variance of at most
     // 4 is left, that rest is a small Gaussian on the coarsest image, and the image is then doubled
     // back with [1, 3] / 4 interpolation. Halving and doubling each add a variance of 0.75 in the
@@ -38,11 +38,7 @@ fn blur<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, axes: &[Axis; 2]
         core::array::from_fn(|a| Layout::new(&axes[a], levels, source[a], target[a]));
 
     if layout.iter().any(|axis| axis.up[0].is_empty()) {
-        for (_, row) in dst.rows_mut() {
-            row.fill(0);
-        }
-
-        return;
+        return crate::flood(dst, [0; 4]);
     }
 
     let resampling = |level: usize, op: Op<'static>| {

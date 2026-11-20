@@ -5,11 +5,7 @@ pub fn tile(src: Source<'_>, mut dst: Target<'_>, cell: IntRect) {
     let rect = dst.rect();
 
     if cell.is_empty() {
-        for (_, row) in dst.rows_mut() {
-            row.fill(0);
-        }
-
-        return;
+        return crate::flood(dst, [0; 4]);
     }
 
     let period = (cell.width() as usize).saturating_mul(4);
