@@ -377,7 +377,6 @@ struct Pass<'a, S: Simd> {
     simd: S,
     input: Input<'a>,
     ops: [Op<'a>; 2],
-    /// The output columns.
     x: Span,
     /// The column of the first horizontal result.
     first: i64,
@@ -710,7 +709,7 @@ fn gauss_horizontal<S: Simd, const R: usize>(
 }
 
 /// The vertical step into the chunks of `out`, from horizontal results with `fraction` fractional
-/// bits. `odd` says whether the output row is odd, which doubling needs.
+/// bits.
 #[inline(always)]
 fn vertical<S: Simd>(
     simd: S,
@@ -839,7 +838,7 @@ fn fixed_weights(weights: &[u16]) -> [u16; MAX_TAPS / 2 + 1] {
     core::array::from_fn(|i| weights.get(i).copied().unwrap_or(0))
 }
 
-/// `v` times the Q15 `weight`, rounded, for values below 2^15.
+/// `v` times the Q15 `weight`, rounded.
 #[inline(always)]
 fn weighted<S: Simd>(simd: S, v: u16x16<S>, weight: u16) -> u16x16<S> {
     simd.mul_q15_i16x16(v.bitcast(), simd.splat_i16x16(weight as i16))
@@ -857,7 +856,6 @@ fn times3<S: Simd>(v: u16x16<S>) -> u16x16<S> {
     v + (v << 1)
 }
 
-/// `v` divided by `2^bits`, rounded to the nearest integer.
 #[inline(always)]
 fn round<S: Simd>(v: u16x16<S>, bits: u32) -> u16x16<S> {
     (v + ((1 << bits) >> 1)) >> bits
