@@ -12,7 +12,7 @@ pub enum ColorSpace {
     LinearRgb,
 }
 
-/// Converts the colors of `src` from one color space to another.
+/// The conversion between the color spaces of `color-interpolation-filters`.
 pub fn convert(src: Source<'_>, mut dst: Target<'_>, from: ColorSpace, to: ColorSpace) {
     let rect = dst.rect();
     let table = (from != to).then(|| table(to == ColorSpace::LinearRgb));

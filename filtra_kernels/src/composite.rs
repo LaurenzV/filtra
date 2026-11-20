@@ -21,7 +21,7 @@ pub enum PorterDuff {
     Lighter,
 }
 
-/// Composites `src` onto `backdrop` with a Porter-Duff operator.
+/// `feComposite` with a Porter-Duff `operator`.
 pub fn composite(src: Source<'_>, backdrop: Source<'_>, operator: PorterDuff, dst: Target<'_>) {
     dispatch!(Level::new(), simd => composite_inner(simd, src, backdrop, operator, dst));
 }

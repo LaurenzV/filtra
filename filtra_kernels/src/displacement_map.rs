@@ -17,8 +17,7 @@ pub enum ColorChannel {
     A,
 }
 
-/// Copies to each pixel the pixel of `src` that contains its center moved by `scale` times the
-/// unpremultiplied `channels` of `map` minus one half.
+/// `feDisplacementMap`, with `scale` in pixels.
 pub fn displacement_map(
     src: Source<'_>,
     map: Source<'_>,

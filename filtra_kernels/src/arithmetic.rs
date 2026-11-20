@@ -4,7 +4,7 @@ use crate::pixmap::segments;
 use crate::simd::{for_each_chunk, pack, unpack};
 use crate::{Source, Target};
 
-/// Combines `src` and `backdrop` with `k1·i1·i2 + k2·i1 + k3·i2 + k4` per premultiplied channel.
+/// `feComposite` with `operator="arithmetic"`.
 pub fn arithmetic(src: Source<'_>, backdrop: Source<'_>, k: [f32; 4], dst: Target<'_>) {
     dispatch!(Level::new(), simd => arithmetic_inner(simd, src, backdrop, k, dst));
 }

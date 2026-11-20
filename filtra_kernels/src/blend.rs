@@ -41,7 +41,7 @@ pub enum BlendMode {
     Luminosity,
 }
 
-/// Blends `src` into `backdrop`.
+/// `feBlend` and `mix-blend-mode`.
 pub fn blend(
     src: Source<'_>,
     backdrop: Source<'_>,

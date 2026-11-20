@@ -4,8 +4,7 @@ use crate::pixmap::segments;
 use crate::simd::{for_each_chunk, pack, premultiply, unpack, unpremultiply};
 use crate::{Source, Target};
 
-/// Transforms the unpremultiplied `[R, G, B, A, 1]` of each pixel of `src` with a 4×5 matrix in
-/// row-major order.
+/// `feColorMatrix`, with every `type` given as its matrix.
 pub fn color_matrix(src: Source<'_>, dst: Target<'_>, matrix: &[f32; 20]) {
     dispatch!(Level::new(), simd => color_matrix_inner(simd, src, dst, matrix));
 }

@@ -12,8 +12,7 @@ pub enum MorphologyOperator {
     Dilate,
 }
 
-/// Sets each pixel to the component-wise minimum or maximum of `src` over the
-/// `2 rx + 1` by `2 ry + 1` pixels centered on it.
+/// `feMorphology`, with the radii in pixels.
 pub fn morphology(
     src: Source<'_>,
     dst: Target<'_>,

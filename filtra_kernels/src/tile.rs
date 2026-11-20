@@ -1,6 +1,6 @@
 use crate::{IntRect, Source, Target};
 
-/// Fills the target with copies of the `cell` part of `src`, one of them at the cell's position.
+/// `feTile`.
 pub fn tile(src: Source<'_>, cell: IntRect, mut dst: Target<'_>) {
     let rect = dst.rect();
 

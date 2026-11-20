@@ -20,7 +20,7 @@ pub struct Turbulence {
     pub origin: [f32; 2],
 }
 
-/// Fills the target with the noise, sampled at the top-left corner of each pixel.
+/// `feTurbulence`, sampled at the top-left corner of each pixel.
 pub fn turbulence(dst: Target<'_>, turbulence: &Turbulence) {
     let lattice = Lattice::new(turbulence.seed);
     let noise = Noise::new(turbulence);

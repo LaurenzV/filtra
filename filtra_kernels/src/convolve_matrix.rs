@@ -33,7 +33,7 @@ pub struct Convolution<'a> {
     pub preserve_alpha: bool,
 }
 
-/// Sets each pixel to the sum of the pixels of `src` around it, weighted by `convolution`.
+/// `feConvolveMatrix`, in pixels.
 pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convolution<'_>) {
     let [columns, rows] = convolution.size;
     let [target_x, target_y] = convolution.target;
