@@ -22,16 +22,15 @@ you need enabled.
 | [`filtra_plan`](filtra_plan) | Turns a filter into backend-independent steps on pixel images. | [![crates.io](https://img.shields.io/crates/v/filtra_plan.svg)](https://crates.io/crates/filtra_plan) [![docs.rs](https://img.shields.io/docsrs/filtra_plan.svg)](https://docs.rs/filtra_plan) |
 | [`filtra_kernels`](filtra_kernels) | The CPU kernels that execute the steps. | [![crates.io](https://img.shields.io/crates/v/filtra_kernels.svg)](https://crates.io/crates/filtra_kernels) [![docs.rs](https://img.shields.io/docsrs/filtra_kernels.svg)](https://docs.rs/filtra_kernels) |
 
-## Support
+## Notes
 
-- **Filter primitives:** all of them: `feBlend`, `feColorMatrix`, `feComponentTransfer`,
-  `feComposite`, `feConvolveMatrix`, `feDiffuseLighting`, `feDisplacementMap`, `feDropShadow`,
-  `feFlood`, `feGaussianBlur`, `feImage`, `feMerge`, `feMorphology`, `feOffset`,
-  `feSpecularLighting`, `feTile` and `feTurbulence`.
-- **CSS filter functions:** `blur()`, `brightness()`, `contrast()`, `drop-shadow()`,
-  `grayscale()`, `hue-rotate()`, `invert()`, `opacity()`, `saturate()` and `sepia()`.
-- **Not yet supported:** the `BackgroundImage`, `BackgroundAlpha`, `FillPaint` and `StrokePaint`
-  inputs, `edgeMode` on `feGaussianBlur`, and `kernelUnitLength`.
+- The CPU implementation is essentially complete. The `BackgroundImage`, `BackgroundAlpha`,
+  `FillPaint` and `StrokePaint` inputs, `edgeMode` on `feGaussianBlur`, and `kernelUnitLength`
+  are not supported and unlikely to be soon.
+- The CPU kernels favor speed over full accuracy. Images are stored as 8-bit premultiplied RGBA,
+  and many filters compute with integers instead of floats, at the cost of more rounding error.
+  Additionally providing a full 32-bit float pipeline is not planned.
+- Support for GPU backends is planned.
 
 ## Minimum supported Rust version
 
