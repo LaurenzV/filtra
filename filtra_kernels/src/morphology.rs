@@ -17,9 +17,9 @@ pub fn morphology(
     src: Source<'_>,
     dst: Target<'_>,
     operator: MorphologyOperator,
-    rx: u32,
-    ry: u32,
+    radius: [u32; 2],
 ) {
+    let [rx, ry] = radius;
     let level = Level::new();
 
     match operator {

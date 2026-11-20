@@ -44,9 +44,9 @@ pub enum BlendMode {
 pub fn blend(
     src: Source<'_>,
     backdrop: Source<'_>,
+    dst: Target<'_>,
     mode: BlendMode,
     composite: bool,
-    dst: Target<'_>,
 ) {
     let level = Level::new();
 

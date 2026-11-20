@@ -1,7 +1,7 @@
 use crate::{IntRect, Source, Target};
 
 /// `feTile`.
-pub fn tile(src: Source<'_>, cell: IntRect, mut dst: Target<'_>) {
+pub fn tile(src: Source<'_>, mut dst: Target<'_>, cell: IntRect) {
     let rect = dst.rect();
 
     if cell.is_empty() {

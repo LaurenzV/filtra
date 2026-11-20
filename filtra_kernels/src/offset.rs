@@ -1,7 +1,8 @@
 use crate::{Source, Target};
 
 /// `feOffset`, by whole pixels.
-pub fn offset(src: Source<'_>, mut dst: Target<'_>, dx: i64, dy: i64) {
+pub fn offset(src: Source<'_>, mut dst: Target<'_>, offset: [i64; 2]) {
+    let [dx, dy] = offset;
     let (rect, source) = (dst.rect(), src.rect());
     let x0 = i64::from(rect.x0).max(i64::from(source.x0).saturating_add(dx));
     let x1 = i64::from(rect.x1).min(i64::from(source.x1).saturating_add(dx));

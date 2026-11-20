@@ -10,7 +10,7 @@ pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
     let axes = std_dev.map(Axis::new);
 
     if axes.iter().all(|axis| axis.weights.is_empty()) {
-        return crate::offset(src, dst, 0, 0);
+        return crate::offset(src, dst, [0, 0]);
     }
 
     dispatch!(Level::new(), simd => blur(simd, src, dst, &axes));
