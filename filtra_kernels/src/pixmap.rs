@@ -1,134 +1,5 @@
 use crate::IntRect;
 
-/// An image of premultiplied RGBA8 pixels, stored row by row.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Pixmap {
-    width: u32,
-    height: u32,
-    data: Vec<u8>,
-}
-
-impl Pixmap {
-    /// Creates a transparent black pixmap.
-    pub fn new(width: u32, height: u32) -> Self {
-        Self {
-            width,
-            height,
-            data: vec![0; width as usize * height as usize * 4],
-        }
-    }
-
-    /// Creates a pixmap from premultiplied RGBA8 data.
-    ///
-    /// Panics if its length doesn't match.
-    pub fn from_data(data: Vec<u8>, width: u32, height: u32) -> Self {
-        check_len(data.len(), width, height);
-
-        Self {
-            width,
-            height,
-            data,
-        }
-    }
-
-    /// The width in pixels.
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    /// The height in pixels.
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    /// The rectangle covering every pixel.
-    pub fn bounds(&self) -> IntRect {
-        bounds(self.width, self.height)
-    }
-
-    /// The premultiplied RGBA8 data.
-    pub fn data(&self) -> &[u8] {
-        &self.data
-    }
-
-    /// The premultiplied RGBA8 data, mutably.
-    pub fn data_mut(&mut self) -> &mut [u8] {
-        &mut self.data
-    }
-
-    /// Returns the premultiplied RGBA8 data.
-    pub fn into_data(self) -> Vec<u8> {
-        self.data
-    }
-
-    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel input.
-    pub fn source(&self, x: i32, y: i32) -> Source<'_> {
-        Source::new(&self.data, self.width, self.height, x, y)
-    }
-
-    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel output.
-    pub fn target(&mut self, x: i32, y: i32) -> Target<'_> {
-        Target::new(&mut self.data, self.width, self.height, x, y)
-    }
-
-    /// The pixmap as a [`PixmapMut`].
-    pub fn as_mut(&mut self) -> PixmapMut<'_> {
-        PixmapMut {
-            width: self.width,
-            height: self.height,
-            data: &mut self.data,
-        }
-    }
-}
-
-/// Premultiplied RGBA8 pixels borrowed from elsewhere, stored row by row.
-#[derive(Debug)]
-pub struct PixmapMut<'a> {
-    width: u32,
-    height: u32,
-    data: &'a mut [u8],
-}
-
-impl<'a> PixmapMut<'a> {
-    /// Borrows premultiplied RGBA8 data as a pixmap.
-    ///
-    /// Panics if its length doesn't match.
-    pub fn from_data(data: &'a mut [u8], width: u32, height: u32) -> Self {
-        check_len(data.len(), width, height);
-
-        Self {
-            width,
-            height,
-            data,
-        }
-    }
-
-    /// The width in pixels.
-    pub fn width(&self) -> u32 {
-        self.width
-    }
-
-    /// The height in pixels.
-    pub fn height(&self) -> u32 {
-        self.height
-    }
-
-    /// The rectangle covering every pixel.
-    pub fn bounds(&self) -> IntRect {
-        bounds(self.width, self.height)
-    }
-
-    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel input.
-    pub fn source(&self, x: i32, y: i32) -> Source<'_> {
-        Source::new(self.data, self.width, self.height, x, y)
-    }
-
-    /// The pixmap placed with its top-left pixel at `(x, y)`, as a kernel output.
-    pub fn target(&mut self, x: i32, y: i32) -> Target<'_> {
-        Target::new(self.data, self.width, self.height, x, y)
-    }
-}
-
 fn check_len(len: usize, width: u32, height: u32) {
     let expected = (width as usize)
         .checked_mul(height as usize)
@@ -139,15 +10,6 @@ fn check_len(len: usize, width: u32, height: u32) {
         expected,
         "the data length doesn't match the size"
     );
-}
-
-fn bounds(width: u32, height: u32) -> IntRect {
-    IntRect::new(
-        0,
-        0,
-        width.min(i32::MAX as u32) as i32,
-        height.min(i32::MAX as u32) as i32,
-    )
 }
 
 fn stride(width: u32) -> usize {
@@ -220,7 +82,12 @@ pub struct Target<'a> {
 }
 
 impl<'a> Target<'a> {
-    fn new(data: &'a mut [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
+    /// Places premultiplied RGBA8 data with its top-left pixel at `(x, y)`.
+    ///
+    /// Panics if its length doesn't match.
+    pub fn new(data: &'a mut [u8], width: u32, height: u32, x: i32, y: i32) -> Self {
+        check_len(data.len(), width, height);
+
         Self {
             data,
             layout: Layout::new(width, height, x, y),

@@ -85,14 +85,10 @@ fn check_at(name: &str, scale: u32) {
     }
 }
 
-fn render(document: &Document, scale: u32) -> cpu::Pixmap {
+fn render(document: &Document, scale: u32) -> Pixmap {
     let (width, height) = (document.width * scale, document.height * scale);
     let scale_transform = Affine::scale(f64::from(scale));
-    let mut pixmap = cpu::Pixmap::from_data(
-        rasterize(&document.shapes, width, height, scale_transform),
-        width,
-        height,
-    );
+    let mut data = rasterize(&document.shapes, width, height, scale_transform);
 
     if let Some(filter) = &document.filter {
         let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
@@ -100,7 +96,7 @@ fn render(document: &Document, scale: u32) -> cpu::Pixmap {
             filtra::apply(
                 backend,
                 filter,
-                pixmap.as_mut(),
+                cpu::PixmapMut::from_data(&mut data, width, height),
                 transform,
                 |shapes, subregion, rect, data| {
                     // Like `<use>`, a referenced element is placed at the subregion's origin.
@@ -116,7 +112,7 @@ fn render(document: &Document, scale: u32) -> cpu::Pixmap {
         });
     }
 
-    pixmap
+    Pixmap::from_parts(data, width as u16, height as u16, PixelMetadata::default())
 }
 
 thread_local! {
@@ -161,10 +157,8 @@ fn rasterize(shapes: &[Shape], width: u32, height: u32, transform: Affine) -> Ve
     target.data_as_u8_slice().to_vec()
 }
 
-fn on_white(result: cpu::Pixmap) -> Pixmap {
-    let (width, height) = (result.width() as u16, result.height() as u16);
-    let data = result.into_data();
-    let image = Pixmap::from_parts(data, width, height, PixelMetadata::default());
+fn on_white(image: Pixmap) -> Pixmap {
+    let (width, height) = (image.width(), image.height());
 
     let mut context = RenderContext::new(width, height);
     context.set_paint(Image {
