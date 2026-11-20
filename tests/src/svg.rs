@@ -11,21 +11,21 @@ use filtra::types::{
 use roxmltree::Node as XmlNode;
 use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
 
-pub struct Document {
-    pub width: u32,
-    pub height: u32,
-    pub shapes: Vec<Shape>,
-    pub filter: Option<Filter<Image>>,
+pub(crate) struct Document {
+    pub(crate) width: u32,
+    pub(crate) height: u32,
+    pub(crate) shapes: Vec<Shape>,
+    pub(crate) filter: Option<Filter<Image>>,
 }
 
-pub type Image = Vec<Shape>;
+pub(crate) type Image = Vec<Shape>;
 
-pub struct Shape {
-    pub path: BezPath,
-    pub color: Color,
+pub(crate) struct Shape {
+    pub(crate) path: BezPath,
+    pub(crate) color: Color,
 }
 
-pub fn parse(text: &str) -> Document {
+pub(crate) fn parse(text: &str) -> Document {
     let tree = roxmltree::Document::parse(text).expect("invalid XML");
     let root = tree.root_element();
     let shapes: Vec<Shape> = (root.descendants())

@@ -57,9 +57,8 @@ pub enum FilterFunction {
 }
 
 impl FilterFunction {
-    /// The equivalent filter primitive.
-    pub fn to_primitive<I>(&self) -> Primitive<I> {
-        match *self {
+    pub(crate) fn to_primitive<I>(self) -> Primitive<I> {
+        match self {
             // TODO: `EdgeMode::Duplicate` (§13.1) once the planner supports edge modes.
             #[cfg(feature = "gaussian-blur")]
             Self::Blur(std_dev) => Primitive::GaussianBlur(GaussianBlur {

@@ -1,6 +1,7 @@
 #[cfg(any(
     feature = "drop-shadow",
     feature = "diffuse-lighting",
+    feature = "flood",
     feature = "specular-lighting"
 ))]
 use filtra_types::Color;
@@ -169,10 +170,7 @@ impl<'a, I> Planner<'a, I> {
             #[cfg(feature = "flood")]
             (Primitive::Flood(flood), []) => Step::Flood {
                 dst,
-                color: flood
-                    .color
-                    .with_opacity(flood.opacity)
-                    .to_premultiplied_rgba8(),
+                color: premultiplied_rgba8(flood.color.with_opacity(flood.opacity)),
             },
             (Primitive::Image(_), []) => Step::Image {
                 dst,
@@ -579,6 +577,19 @@ fn color_in(color: Color, space: ColorSpace) -> [f32; 3] {
         ColorSpace::Srgb => c.clamp(0.0, 1.0),
         ColorSpace::LinearRgb => srgb_to_linear(c.clamp(0.0, 1.0)),
     })
+}
+
+#[cfg(feature = "flood")]
+fn premultiplied_rgba8(color: Color) -> [u8; 4] {
+    let alpha = color.a.clamp(0.0, 1.0);
+    let to_u8 = |value: f32| (value * 255.0 + 0.5) as u8;
+
+    [
+        to_u8(color.r.clamp(0.0, 1.0) * alpha),
+        to_u8(color.g.clamp(0.0, 1.0) * alpha),
+        to_u8(color.b.clamp(0.0, 1.0) * alpha),
+        to_u8(alpha),
+    ]
 }
 
 #[cfg(any(

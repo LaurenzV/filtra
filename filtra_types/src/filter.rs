@@ -148,8 +148,7 @@ pub struct Subregion {
 }
 
 impl Subregion {
-    /// The subregion with missing attributes taken from `default`.
-    pub fn resolve(self, default: Rect) -> Rect {
+    fn resolve(self, default: Rect) -> Rect {
         Rect::new(
             self.x.unwrap_or(default.x),
             self.y.unwrap_or(default.y),
