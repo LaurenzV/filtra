@@ -37,6 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
+      # TODO: Test every x86 level the kernels dispatch to (SSE2 and AVX2), not only the runner's best.
       - run: cargo test --workspace --all-features
 
   test-wasm:
