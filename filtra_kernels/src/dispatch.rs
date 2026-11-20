@@ -1,6 +1,7 @@
-// Like `fearless_simd::dispatch!`, except that AVX-512 runs the AVX2 versions: the kernels use 256-bit
-// vectors, so a separate AVX-512 copy of each one would mostly add binary size. The kernels also get
-// the concrete level type, which lets traits like `MulQ15` be implemented per level.
+// Like `fearless_simd::dispatch!`, but with fewer x86 copies of each kernel, which mostly add binary
+// size: AVX-512 runs the AVX2 versions, since the kernels use 256-bit vectors, and SSE4.2 runs the
+// SSE2 versions, which are only a few percent slower. The kernels also get the concrete level type,
+// which lets traits like `MulQ15` be implemented per level.
 macro_rules! dispatch {
     ($simd:pat => $op:expr) => {{
         use fearless_simd::{Level, Simd};
@@ -35,21 +36,17 @@ macro_rules! dispatch {
                 )
             }
             #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            Level::Sse4_2(token) => token.vectorize(
-                #[inline(always)]
-                || {
-                    let $simd = token;
-                    $op
-                },
-            ),
-            #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-            Level::Sse2(token) => token.vectorize(
-                #[inline(always)]
-                || {
-                    let $simd = token;
-                    $op
-                },
-            ),
+            level @ (Level::Sse4_2(_) | Level::Sse2(_)) => {
+                let token = level.as_sse2().expect("SSE4.2 implies SSE2");
+
+                token.vectorize(
+                    #[inline(always)]
+                    || {
+                        let $simd = token;
+                        $op
+                    },
+                )
+            }
             #[cfg(not(any(
                 all(target_arch = "aarch64", target_feature = "neon"),
                 all(

@@ -29,7 +29,7 @@ use fearless_simd::WasmSimd128;
 ))]
 use fearless_simd::i16x8;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-use fearless_simd::{Avx2, Sse2, Sse4_2};
+use fearless_simd::{Avx2, Sse2};
 use fearless_simd::{Simd, i16x16, prelude::*};
 
 // The product of signed Q15 numbers, rounded to nearest. `-32768 * -32768` overflows, with a
@@ -80,21 +80,6 @@ impl MulQ15 for Avx2 {
         );
 
         mul(self, a.into(), b.into()).simd_into(self)
-    }
-}
-
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-impl MulQ15 for Sse4_2 {
-    #[inline(always)]
-    fn mul_q15(self, a: i16x16<Self>, b: i16x16<Self>) -> i16x16<Self> {
-        fearless_simd::kernel!(
-            #[inline(always)]
-            fn mul(sse4_2: Sse4_2, a: __m128i, b: __m128i) -> __m128i {
-                _mm_mulhrs_epi16(a, b)
-            }
-        );
-
-        halves(self, a, b, mul)
     }
 }
 
