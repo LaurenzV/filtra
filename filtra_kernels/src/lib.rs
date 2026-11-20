@@ -76,6 +76,3 @@ pub use rect::IntRect;
 pub use tile::tile;
 #[cfg(feature = "turbulence")]
 pub use turbulence::{Turbulence, turbulence};
-
-// TODO: In-place variants of kernels that compute each pixel from the same pixel of their input,
-// for steps that may overwrite it.
