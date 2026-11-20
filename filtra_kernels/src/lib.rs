@@ -32,6 +32,8 @@ mod lighting;
 mod merge;
 #[cfg(feature = "morphology")]
 mod morphology;
+#[cfg(feature = "gaussian-blur")]
+mod mul_q15;
 mod offset;
 // Some of the shared helpers go unused when only some primitives are enabled.
 #[cfg_attr(not(feature = "all"), allow(dead_code, unused_imports))]

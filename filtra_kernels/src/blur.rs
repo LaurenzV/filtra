@@ -2,6 +2,7 @@ use core::ops::Range;
 
 use fearless_simd::{Level, Simd, dispatch, prelude::*, u8x32, u16x16, u32x8};
 
+use crate::mul_q15::MulQ15;
 use crate::simd::Wide;
 use crate::{IntRect, Source, Target};
 
@@ -841,7 +842,7 @@ fn fixed_weights(weights: &[u16]) -> [u16; MAX_TAPS / 2 + 1] {
 /// `v` times the Q15 `weight`, rounded.
 #[inline(always)]
 fn weighted<S: Simd>(simd: S, v: u16x16<S>, weight: u16) -> u16x16<S> {
-    simd.mul_q15_i16x16(v.bitcast(), simd.splat_i16x16(weight as i16))
+    simd.mul_q15(v.bitcast(), simd.splat_i16x16(weight as i16))
         .bitcast()
 }
 
