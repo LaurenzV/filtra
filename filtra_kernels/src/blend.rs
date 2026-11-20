@@ -13,109 +13,92 @@ pub fn blend(
     mode: BlendMode,
     composite: bool,
 ) {
-    // One dispatch per mode keeps each mode in its own function, which keeps the stack frames of
-    // debug builds small.
-    macro_rules! blend_with {
-        ($mode:ident) => {
-            dispatch!(simd => $mode(simd, [src, backdrop], composite, dst))
-        };
-    }
+    let inputs = [src, backdrop];
 
     match mode {
-        BlendMode::Normal => blend_with!(normal),
-        BlendMode::Multiply => blend_with!(multiply),
-        BlendMode::Screen => blend_with!(screen),
-        BlendMode::Overlay => blend_with!(overlay),
-        BlendMode::Darken => blend_with!(darken),
-        BlendMode::Lighten => blend_with!(lighten),
-        BlendMode::ColorDodge => blend_with!(color_dodge),
-        BlendMode::ColorBurn => blend_with!(color_burn),
-        BlendMode::HardLight => blend_with!(hard_light),
-        BlendMode::SoftLight => blend_with!(soft_light),
-        BlendMode::Difference => blend_with!(difference),
-        BlendMode::Exclusion => blend_with!(exclusion),
-        BlendMode::Hue => blend_with!(hue),
-        BlendMode::Saturation => blend_with!(saturation),
-        BlendMode::Color => blend_with!(color),
-        BlendMode::Luminosity => blend_with!(luminosity),
+        BlendMode::ColorDodge
+        | BlendMode::ColorBurn
+        | BlendMode::SoftLight
+        | BlendMode::Hue
+        | BlendMode::Saturation
+        | BlendMode::Color
+        | BlendMode::Luminosity => {
+            dispatch!(simd => float(simd, inputs, composite, dst, {
+                #[inline(always)]
+                |s, b| float_mixed(mode, s, b)
+            }))
+        }
+        _ => dispatch!(simd => integer(simd, inputs, composite, dst, {
+            #[inline(always)]
+            |cs, sa, cb, ba| integer_mixed(mode, cs, sa, cb, ba)
+        })),
     }
 }
 
-macro_rules! integer_mode {
-    ($name:ident, |$cs:ident, $sa:ident, $cb:ident, $ba:ident| $mixed:expr) => {
-        #[inline(always)]
-        fn $name<S: Simd>(simd: S, inputs: [Source<'_>; 2], composite: bool, dst: Target<'_>) {
-            integer(simd, inputs, composite, dst, {
-                #[inline(always)]
-                #[allow(unused_variables, reason = "Not every mode uses every input.")]
-                |$cs, $sa, $cb, $ba| $mixed
-            });
+#[inline(always)]
+fn integer_mixed<S: Simd>(
+    mode: BlendMode,
+    cs: u16x16<S>,
+    sa: u16x16<S>,
+    cb: u16x16<S>,
+    ba: u16x16<S>,
+) -> u16x16<S> {
+    match mode {
+        BlendMode::Multiply => cs * cb,
+        BlendMode::Screen => cs * ba + cb * sa - cs * cb,
+        BlendMode::Overlay => mixed_hard_light(cb, ba, cs, sa),
+        BlendMode::Darken => (cs * ba).min(cb * sa),
+        BlendMode::Lighten => (cs * ba).max(cb * sa),
+        BlendMode::HardLight => mixed_hard_light(cs, sa, cb, ba),
+        BlendMode::Difference => {
+            let (s, b) = (cs * ba, cb * sa);
+            s.max(b) - s.min(b)
         }
-    };
+        BlendMode::Exclusion => cs * ba + cb * sa - ((cs * cb) << 1),
+        _ => cs * ba,
+    }
 }
 
-macro_rules! float_mode {
-    ($name:ident, |$s:ident, $b:ident| $mixed:expr) => {
-        #[inline(always)]
-        fn $name<S: Simd>(simd: S, inputs: [Source<'_>; 2], composite: bool, dst: Target<'_>) {
-            float(simd, inputs, composite, dst, {
-                #[inline(always)]
-                |$s, $b| $mixed
-            });
+#[inline(always)]
+fn float_mixed<S: Simd>(mode: BlendMode, s: [f32x8<S>; 4], b: [f32x8<S>; 4]) -> [f32x8<S>; 3] {
+    match mode {
+        BlendMode::ColorDodge => [
+            dodge(s[0], s[3], b[0], b[3]),
+            dodge(s[1], s[3], b[1], b[3]),
+            dodge(s[2], s[3], b[2], b[3]),
+        ],
+        BlendMode::ColorBurn => [
+            burn(s[0], s[3], b[0], b[3]),
+            burn(s[1], s[3], b[1], b[3]),
+            burn(s[2], s[3], b[2], b[3]),
+        ],
+        BlendMode::SoftLight => {
+            let both = s[3] * b[3];
+            let (s, b) = (unpremultiply(s), unpremultiply(b));
+            [
+                soft(s[0], b[0]) * both,
+                soft(s[1], b[1]) * both,
+                soft(s[2], b[2]) * both,
+            ]
         }
-    };
+        BlendMode::Hue => {
+            let (s, b, bound) = scaled(s, b);
+            set_lum(set_sat(s, sat(b)), lum(b), bound)
+        }
+        BlendMode::Saturation => {
+            let (s, b, bound) = scaled(s, b);
+            set_lum(set_sat(b, sat(s)), lum(b), bound)
+        }
+        BlendMode::Color => {
+            let (s, b, bound) = scaled(s, b);
+            set_lum(s, lum(b), bound)
+        }
+        _ => {
+            let (s, b, bound) = scaled(s, b);
+            set_lum(b, lum(s), bound)
+        }
+    }
 }
-
-integer_mode!(normal, |cs, sa, cb, ba| cs * ba);
-integer_mode!(multiply, |cs, sa, cb, ba| cs * cb);
-integer_mode!(screen, |cs, sa, cb, ba| cs * ba + cb * sa - cs * cb);
-integer_mode!(overlay, |cs, sa, cb, ba| mixed_hard_light(cb, ba, cs, sa));
-integer_mode!(darken, |cs, sa, cb, ba| (cs * ba).min(cb * sa));
-integer_mode!(lighten, |cs, sa, cb, ba| (cs * ba).max(cb * sa));
-integer_mode!(hard_light, |cs, sa, cb, ba| mixed_hard_light(
-    cs, sa, cb, ba
-));
-integer_mode!(difference, |cs, sa, cb, ba| {
-    let (s, b) = (cs * ba, cb * sa);
-    s.max(b) - s.min(b)
-});
-integer_mode!(exclusion, |cs, sa, cb, ba| cs * ba + cb * sa
-    - ((cs * cb) << 1));
-float_mode!(color_dodge, |s, b| [
-    dodge(s[0], s[3], b[0], b[3]),
-    dodge(s[1], s[3], b[1], b[3]),
-    dodge(s[2], s[3], b[2], b[3]),
-]);
-float_mode!(color_burn, |s, b| [
-    burn(s[0], s[3], b[0], b[3]),
-    burn(s[1], s[3], b[1], b[3]),
-    burn(s[2], s[3], b[2], b[3]),
-]);
-float_mode!(soft_light, |s, b| {
-    let both = s[3] * b[3];
-    let (s, b) = (unpremultiply(s), unpremultiply(b));
-    [
-        soft(s[0], b[0]) * both,
-        soft(s[1], b[1]) * both,
-        soft(s[2], b[2]) * both,
-    ]
-});
-float_mode!(hue, |s, b| {
-    let (s, b, bound) = scaled(s, b);
-    set_lum(set_sat(s, sat(b)), lum(b), bound)
-});
-float_mode!(saturation, |s, b| {
-    let (s, b, bound) = scaled(s, b);
-    set_lum(set_sat(b, sat(s)), lum(b), bound)
-});
-float_mode!(color, |s, b| {
-    let (s, b, bound) = scaled(s, b);
-    set_lum(s, lum(b), bound)
-});
-float_mode!(luminosity, |s, b| {
-    let (s, b, bound) = scaled(s, b);
-    set_lum(b, lum(s), bound)
-});
 
 #[inline(always)]
 fn integer<S: Simd>(
