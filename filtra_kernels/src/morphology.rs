@@ -148,9 +148,9 @@ fn sliding<'i, 'o, S: Simd, const DILATE: bool>(
             let current = rows(lo + k as i64);
 
             if k + 1 < stored {
-                combine::<S, DILATE>(simd, Some(current), Some(&tail[..len]), output);
+                min_max::<S, DILATE>(simd, Some(current), Some(&tail[..len]), output);
             } else if hi < block + window {
-                combine::<S, DILATE>(simd, Some(current), None, output);
+                min_max::<S, DILATE>(simd, Some(current), None, output);
             } else {
                 output.copy_from_slice(current);
             }
@@ -185,7 +185,7 @@ fn sliding<'i, 'o, S: Simd, const DILATE: bool>(
 
             match covered {
                 Prefix::Empty => assign(suffix(block + j), output),
-                Prefix::Rows => combine::<S, DILATE>(simd, suffix(block + j), Some(prefix), output),
+                Prefix::Rows => min_max::<S, DILATE>(simd, suffix(block + j), Some(prefix), output),
                 Prefix::Transparent => output.fill(0),
             }
         }
@@ -220,7 +220,7 @@ fn accumulate<S: Simd, const DILATE: bool>(simd: S, row: Option<&[u8]>, output: 
 }
 
 #[inline(always)]
-fn combine<S: Simd, const DILATE: bool>(
+fn min_max<S: Simd, const DILATE: bool>(
     simd: S,
     a: Option<&[u8]>,
     b: Option<&[u8]>,
