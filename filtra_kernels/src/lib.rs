@@ -1,5 +1,8 @@
 //! Filter effect kernels on premultiplied RGBA8 pixmaps.
 //!
+//! This crate provides SIMD-accelerated CPU kernels for each filter primitive defined in
+//! [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/).
+//!
 //! Kernels work in a single coordinate space, in which every input is placed with
 //! [`Pixmap::source`] and the output with [`Pixmap::target`]. A kernel writes every pixel of its
 //! target; pixels outside of an input are transparent black.

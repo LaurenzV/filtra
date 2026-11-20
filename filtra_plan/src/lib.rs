@@ -1,9 +1,12 @@
 //! Plans the evaluation of SVG and CSS filter effects.
 //!
-//! [`plan`] maps a [`Filter`](filtra_types::Filter) from user space to pixels and turns it into a
-//! list of [`Step`]s on images. The steps settle everything that affects the result. A backend
-//! executes them directly or as passes of its own, and [`assign_buffers`] assigns the images of
-//! those passes to as few buffers as possible.
+//! This crate provides the infrastructure to decompose arbitrary filter graphs into steps and to
+//! schedule their rendering, independently of the backend.
+//!
+//! [`plan`] turns a [`Filter`](filtra_types::Filter) into a list of [`Step`]s on pixel images. The
+//! steps settle everything that affects the result. A backend executes them directly or as passes
+//! of its own, and [`assign_buffers`] assigns the images of those passes to as few buffers as
+//! possible.
 //!
 //! Every step writes all pixels of its destination image. Pixels outside of a source image are
 //! transparent black.

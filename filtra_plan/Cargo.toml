@@ -1,13 +1,19 @@
 [package]
 name = "filtra_plan"
 description = "Plans the evaluation of SVG and CSS filter effects."
+categories = ["graphics", "rendering"]
+keywords = ["svg", "css", "filter"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
-filtra_types = { path = "../filtra_types", default-features = false }
+filtra_types = { workspace = true }
 
 [features]
 default = ["all"]
