@@ -27,38 +27,22 @@ fn composite_inner<S: Simd>(
     let inputs = [src, backdrop];
 
     match operator {
-        CompositeOperator::Over => over(simd, inputs, dst),
-        CompositeOperator::In => in_(simd, inputs, dst),
-        CompositeOperator::Out => out(simd, inputs, dst),
-        CompositeOperator::Atop => atop(simd, inputs, dst),
-        CompositeOperator::Xor => xor(simd, inputs, dst),
         CompositeOperator::Lighter => lighter(simd, inputs, dst),
         CompositeOperator::Arithmetic { k1, k2, k3, k4 } => {
             arithmetic(simd, inputs, dst, [k1, k2, k3, k4]);
         }
+        _ => porter_duff(simd, inputs, dst, {
+            #[inline(always)]
+            |cs, sa, cb, ba| match operator {
+                CompositeOperator::In => div255(cs * ba),
+                CompositeOperator::Out => div255(cs * (255 - ba)),
+                CompositeOperator::Atop => div255(cs * ba + cb * (255 - sa)),
+                CompositeOperator::Xor => div255(cs * (255 - ba) + cb * (255 - sa)),
+                _ => cs + div255(cb * (255 - sa)),
+            }
+        }),
     }
 }
-
-macro_rules! porter_duff {
-    ($name:ident, |$cs:ident, $sa:ident, $cb:ident, $ba:ident| $formula:expr) => {
-        #[inline(always)]
-        fn $name<S: Simd>(simd: S, inputs: [Source<'_>; 2], dst: Target<'_>) {
-            porter_duff(simd, inputs, dst, {
-                #[inline(always)]
-                #[allow(unused_variables, reason = "Not every operator uses every input.")]
-                |$cs, $sa, $cb, $ba| $formula
-            });
-        }
-    };
-}
-
-porter_duff!(over, |cs, sa, cb, ba| cs + div255(cb * (255 - sa)));
-porter_duff!(in_, |cs, sa, cb, ba| div255(cs * ba));
-porter_duff!(out, |cs, sa, cb, ba| div255(cs * (255 - ba)));
-porter_duff!(atop, |cs, sa, cb, ba| div255(cs * ba + cb * (255 - sa)));
-porter_duff!(xor, |cs, sa, cb, ba| div255(
-    cs * (255 - ba) + cb * (255 - sa)
-));
 
 #[inline(always)]
 fn lighter<S: Simd>(simd: S, inputs: [Source<'_>; 2], dst: Target<'_>) {
