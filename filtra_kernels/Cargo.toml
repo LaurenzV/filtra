@@ -26,11 +26,9 @@ all = [
     "diffuse-lighting",
     "displacement-map",
     "drop-shadow",
-    "flood",
     "gaussian-blur",
     "merge",
     "morphology",
-    "offset",
     "specular-lighting",
     "tile",
     "turbulence",
@@ -44,11 +42,9 @@ convolve-matrix = []
 diffuse-lighting = []
 displacement-map = []
 drop-shadow = ["gaussian-blur", "color-matrix", "merge"]
-flood = []
 gaussian-blur = []
 merge = []
 morphology = []
-offset = []
 specular-lighting = []
 tile = []
 turbulence = []
