@@ -17,9 +17,13 @@ use filtra_types::TransferFunction;
 use filtra_types::TurbulenceType;
 use filtra_types::{ColorInterpolation, Filter, Input, Node, Primitive, Rect};
 
+#[cfg(feature = "convolve-matrix")]
+use crate::Convolution;
+#[cfg(feature = "turbulence")]
+use crate::Turbulence;
 use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-use crate::{Light, Reflection};
+use crate::{Light, Lighting, Reflection};
 
 /// Plans `filter` for a source image covering `bounds`.
 pub fn plan<I>(filter: &Filter<I>, transform: Transform, bounds: IntRect) -> Plan {
@@ -234,17 +238,20 @@ impl<'a, I> Planner<'a, I> {
             // whole attribute ("Partial implementations"), which then takes its initial value.
             (Primitive::Turbulence(turbulence), []) => Step::Turbulence {
                 dst,
-                base_frequency: match [turbulence.base_frequency_x, turbulence.base_frequency_y] {
-                    [x, y] if x >= 0.0 && y >= 0.0 => {
-                        [x / self.transform.sx, y / self.transform.sy]
-                    }
-                    _ => [0.0; 2],
+                turbulence: Turbulence {
+                    base_frequency: match [turbulence.base_frequency_x, turbulence.base_frequency_y]
+                    {
+                        [x, y] if x >= 0.0 && y >= 0.0 => {
+                            [x / self.transform.sx, y / self.transform.sy]
+                        }
+                        _ => [0.0; 2],
+                    },
+                    octaves: u32::try_from(turbulence.num_octaves).unwrap_or(1),
+                    seed: turbulence.seed as i64,
+                    stitch_tile: turbulence.stitch_tiles.then_some(subregion),
+                    fractal_noise: turbulence.kind == TurbulenceType::FractalNoise,
+                    origin: [self.transform.tx, self.transform.ty],
                 },
-                octaves: u32::try_from(turbulence.num_octaves).unwrap_or(1),
-                seed: turbulence.seed as i64,
-                stitch_tile: turbulence.stitch_tiles.then_some(subregion),
-                fractal_noise: turbulence.kind == TurbulenceType::FractalNoise,
-                origin: [self.transform.tx, self.transform.ty],
             },
             #[cfg(feature = "displacement-map")]
             (Primitive::DisplacementMap(displacement), &[src, map]) => Step::DisplacementMap {
@@ -285,41 +292,40 @@ impl<'a, I> Planner<'a, I> {
             (Primitive::DiffuseLighting(diffuse), &[src]) => Step::Lighting {
                 src,
                 dst,
-                reflection: Reflection::Diffuse {
-                    constant: diffuse.diffuse_constant,
+                lighting: Lighting {
+                    reflection: Reflection::Diffuse {
+                        constant: diffuse.diffuse_constant,
+                    },
+                    surface_scale: diffuse.surface_scale,
+                    light: light(diffuse.light_source),
+                    color: color_in(diffuse.lighting_color, space),
+                    scale: [self.transform.sx, self.transform.sy],
+                    origin: [self.transform.tx, self.transform.ty],
                 },
-                surface_scale: diffuse.surface_scale,
-                light: light(diffuse.light_source),
-                color: color_in(diffuse.lighting_color, space),
-                scale: [self.transform.sx, self.transform.sy],
-                origin: [self.transform.tx, self.transform.ty],
             },
             #[cfg(feature = "specular-lighting")]
             (Primitive::SpecularLighting(specular), &[src]) => Step::Lighting {
                 src,
                 dst,
-                reflection: Reflection::Specular {
-                    constant: specular.specular_constant,
-                    exponent: specular.specular_exponent,
+                lighting: Lighting {
+                    reflection: Reflection::Specular {
+                        constant: specular.specular_constant,
+                        exponent: specular.specular_exponent,
+                    },
+                    surface_scale: specular.surface_scale,
+                    light: light(specular.light_source),
+                    color: color_in(specular.lighting_color, space),
+                    scale: [self.transform.sx, self.transform.sy],
+                    origin: [self.transform.tx, self.transform.ty],
                 },
-                surface_scale: specular.surface_scale,
-                light: light(specular.light_source),
-                color: color_in(specular.lighting_color, space),
-                scale: [self.transform.sx, self.transform.sy],
-                origin: [self.transform.tx, self.transform.ty],
             },
             #[cfg(feature = "convolve-matrix")]
             (Primitive::ConvolveMatrix(convolution), &[src]) => {
                 match convolve_matrix(convolution) {
-                    Some((size, weights, target)) => Step::ConvolveMatrix {
+                    Some(convolution) => Step::ConvolveMatrix {
                         src,
                         dst,
-                        size,
-                        weights,
-                        target,
-                        bias: convolution.bias,
-                        edge_mode: convolution.edge_mode,
-                        preserve_alpha: convolution.preserve_alpha,
+                        convolution,
                     },
                     None => Step::Offset {
                         src,
@@ -607,7 +613,7 @@ fn srgb_to_linear(c: f32) -> f32 {
 
 #[cfg(feature = "convolve-matrix")]
 // TODO: `kernelUnitLength`, which is deprecated (§9.9).
-fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<([u32; 2], Vec<f32>, [u32; 2])> {
+fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<Convolution> {
     // An unsupported value invalidates its attribute ("Partial implementations"), which then
     // takes its initial value.
     let size = match [convolution.order_x, convolution.order_y] {
@@ -647,7 +653,14 @@ fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<([u32; 2], Vec<f32>, 
     let weights =
         (convolution.kernel.iter().rev()).map(|&weight| (f64::from(weight) / divisor) as f32);
 
-    Some((size, weights.collect(), target))
+    Some(Convolution {
+        size,
+        weights: weights.collect(),
+        target,
+        bias: convolution.bias,
+        edge_mode: convolution.edge_mode,
+        preserve_alpha: convolution.preserve_alpha,
+    })
 }
 
 #[cfg(feature = "component-transfer")]

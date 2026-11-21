@@ -1,3 +1,20 @@
+/// Lighting of the alpha of an image as a height map (`feDiffuseLighting`, `feSpecularLighting`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Lighting {
+    /// The reflection model.
+    pub reflection: Reflection,
+    /// The height of the surface where alpha is 1, in user units.
+    pub surface_scale: f32,
+    /// The light source in user space.
+    pub light: Light,
+    /// The color of the light in the color space of the result.
+    pub color: [f32; 3],
+    /// The number of pixels per user unit along the x- and y-axis.
+    pub scale: [f32; 2],
+    /// The position of the user-space origin in pixels.
+    pub origin: [f32; 2],
+}
+
 /// The reflection model of a lighting primitive.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Reflection {

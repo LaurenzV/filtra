@@ -3,27 +3,10 @@ use filtra_types::EdgeMode;
 
 use crate::dispatch::dispatch;
 use crate::simd::{for_each_output_chunk, pack, premultiply, unpack, unpremultiply};
-use crate::{IntRect, Source, Target};
-
-/// The parameters of [`convolve_matrix`].
-#[derive(Debug, Clone, Copy)]
-pub struct Convolution<'a> {
-    /// The number of columns and rows of `weights`.
-    pub size: [u32; 2],
-    /// The weights in row-major order, each multiplying the pixel it covers.
-    pub weights: &'a [f32],
-    /// The column and row of the weight that covers the pixel being computed.
-    pub target: [u32; 2],
-    /// The value added to alpha, and times alpha to each color.
-    pub bias: f32,
-    /// How the input is extended beyond the edges of the target.
-    pub edge_mode: EdgeMode,
-    /// Whether only the unpremultiplied colors are convolved, keeping alpha.
-    pub preserve_alpha: bool,
-}
+use crate::{Convolution, IntRect, Source, Target};
 
 /// `feConvolveMatrix`, in pixels.
-pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convolution<'_>) {
+pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convolution) {
     let [columns, rows] = convolution.size;
     let [target_x, target_y] = convolution.target;
 
@@ -45,7 +28,7 @@ fn convolve_matrix_inner<S: Simd>(
     simd: S,
     src: Source<'_>,
     mut dst: Target<'_>,
-    convolution: &Convolution<'_>,
+    convolution: &Convolution,
 ) {
     let rect = dst.rect();
 
@@ -149,7 +132,7 @@ struct ExtendedRows {
 }
 
 impl ExtendedRows {
-    fn new(rect: IntRect, convolution: &Convolution<'_>) -> Self {
+    fn new(rect: IntRect, convolution: &Convolution) -> Self {
         let width = rect.width() as usize;
         let extended = width + convolution.size[0] as usize - 1;
 

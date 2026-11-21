@@ -2,24 +2,7 @@ use fearless_simd::{Simd, f32x4, f32x8, prelude::*};
 
 use crate::dispatch::dispatch;
 use crate::simd::{for_each_output_chunk, pack, premultiply};
-use crate::{IntRect, Target};
-
-/// Perlin turbulence (`feTurbulence`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Turbulence {
-    /// The base frequencies along the x- and y-axis, in cycles per pixel.
-    pub base_frequency: [f32; 2],
-    /// The number of octaves.
-    pub octaves: u32,
-    /// The seed of the random numbers.
-    pub seed: i64,
-    /// The pixels the noise tiles, if it is stitched.
-    pub stitch_tile: Option<IntRect>,
-    /// Whether to sum the octaves (`fractalNoise`) instead of their absolute values.
-    pub fractal_noise: bool,
-    /// The position of the noise's origin in pixels.
-    pub origin: [f32; 2],
-}
+use crate::{Target, Turbulence};
 
 /// `feTurbulence`, sampled at the top-left corner of each pixel.
 pub fn turbulence(dst: Target<'_>, turbulence: &Turbulence) {

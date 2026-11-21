@@ -1,8 +1,4 @@
 use super::{Backend, PixmapMut};
-#[cfg(feature = "convolve-matrix")]
-use filtra_kernels::Convolution;
-#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-use filtra_kernels::Lighting;
 use filtra_kernels::{IntRect, Source, Target};
 use filtra_plan::{ImageId, Pass, Plan, Step};
 
@@ -229,24 +225,8 @@ fn execute_step(
             filtra_kernels::displacement_map(src, map, target, *scale, *channels);
         }),
         #[cfg(feature = "turbulence")]
-        Step::Turbulence {
-            dst,
-            base_frequency,
-            octaves,
-            seed,
-            stitch_tile,
-            fractal_noise,
-            origin,
-        } => store.write(*dst, |_, target| {
-            let turbulence = filtra_kernels::Turbulence {
-                base_frequency: *base_frequency,
-                octaves: *octaves,
-                seed: *seed,
-                stitch_tile: *stitch_tile,
-                fractal_noise: *fractal_noise,
-                origin: *origin,
-            };
-            filtra_kernels::turbulence(target, &turbulence);
+        Step::Turbulence { dst, turbulence } => store.write(*dst, |_, target| {
+            filtra_kernels::turbulence(target, turbulence);
         }),
         #[cfg(feature = "color-matrix")]
         Step::ColorMatrix { src, dst, matrix } => store.write(*dst, |inputs, target| {
@@ -265,43 +245,13 @@ fn execute_step(
         Step::ConvolveMatrix {
             src,
             dst,
-            size,
-            weights,
-            target,
-            bias,
-            edge_mode,
-            preserve_alpha,
-        } => store.write(*dst, |inputs, output| {
-            let convolution = Convolution {
-                size: *size,
-                weights,
-                target: *target,
-                bias: *bias,
-                edge_mode: *edge_mode,
-                preserve_alpha: *preserve_alpha,
-            };
-            filtra_kernels::convolve_matrix(inputs.read(*src), output, &convolution);
+            convolution,
+        } => store.write(*dst, |inputs, target| {
+            filtra_kernels::convolve_matrix(inputs.read(*src), target, convolution);
         }),
         #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-        Step::Lighting {
-            src,
-            dst,
-            reflection,
-            surface_scale,
-            light,
-            color,
-            scale,
-            origin,
-        } => store.write(*dst, |inputs, output| {
-            let lighting = Lighting {
-                reflection: *reflection,
-                surface_scale: *surface_scale,
-                light: *light,
-                color: *color,
-                scale: *scale,
-                origin: *origin,
-            };
-            filtra_kernels::lighting(inputs.read(*src), output, &lighting);
+        Step::Lighting { src, dst, lighting } => store.write(*dst, |inputs, target| {
+            filtra_kernels::lighting(inputs.read(*src), target, lighting);
         }),
         #[cfg(feature = "gaussian-blur")]
         Step::GaussianBlur { src, dst, std_dev } => store.write(*dst, |inputs, target| {

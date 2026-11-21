@@ -2,24 +2,7 @@ use fearless_simd::{Simd, f32x8, prelude::*};
 
 use crate::dispatch::dispatch;
 use crate::simd::{for_each_output_chunk, pack, pow};
-use crate::{IntRect, Light, Reflection, Source, Target};
-
-/// Lighting of the alpha of an image as a height map (`feDiffuseLighting`, `feSpecularLighting`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Lighting {
-    /// The reflection model.
-    pub reflection: Reflection,
-    /// The height of the surface where alpha is 1, in user units.
-    pub surface_scale: f32,
-    /// The light source in user space.
-    pub light: Light,
-    /// The color of the light in the color space of the result.
-    pub color: [f32; 3],
-    /// The number of pixels per user unit along the x- and y-axis.
-    pub scale: [f32; 2],
-    /// The position of the user-space origin in pixels.
-    pub origin: [f32; 2],
-}
+use crate::{IntRect, Light, Lighting, Reflection, Source, Target};
 
 /// `feDiffuseLighting` and `feSpecularLighting`.
 pub fn lighting(src: Source<'_>, dst: Target<'_>, lighting: &Lighting) {
