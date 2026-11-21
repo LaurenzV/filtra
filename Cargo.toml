@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["filtra", "filtra_kernels", "filtra_plan", "filtra_types", "tests"]
+members = ["filtra", "filtra_core", "filtra_kernels", "filtra_plan", "filtra_types", "tests"]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +11,7 @@ repository = "https://github.com/LaurenzV/filtra"
 
 [workspace.dependencies]
 filtra = { version = "0.1.0", path = "filtra" }
+filtra_core = { version = "0.1.0", path = "filtra_core", default-features = false }
 filtra_kernels = { version = "0.1.0", path = "filtra_kernels", default-features = false }
 filtra_plan = { version = "0.1.0", path = "filtra_plan", default-features = false }
 filtra_types = { version = "0.1.0", path = "filtra_types", default-features = false }

@@ -15,9 +15,11 @@
 
 mod buffers;
 mod planner;
-mod rect;
 
 pub use buffers::{Buffers, assign_buffers};
+pub use filtra_core::{ColorSpace, IntRect};
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+pub use filtra_core::{Light, Reflection};
 #[cfg(feature = "blend")]
 pub use filtra_types::BlendMode;
 #[cfg(feature = "displacement-map")]
@@ -29,7 +31,6 @@ pub use filtra_types::EdgeMode;
 #[cfg(feature = "morphology")]
 pub use filtra_types::MorphologyOperator;
 pub use planner::plan;
-pub use rect::IntRect;
 
 /// The steps that evaluate a filter.
 #[derive(Debug, Clone, PartialEq)]
@@ -338,60 +339,6 @@ impl Pass for Step {
 /// An image that a step or pass reads or writes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ImageId(pub usize);
-
-/// The color space of an image.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ColorSpace {
-    /// Gamma-encoded sRGB.
-    Srgb,
-    /// Linear-light sRGB.
-    LinearRgb,
-}
-
-#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-/// The reflection model of [`Step::Lighting`].
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Reflection {
-    /// The diffuse term of the Phong model, which is opaque.
-    Diffuse {
-        /// The diffuse constant `kd`.
-        constant: f32,
-    },
-    /// The specular term of the Blinn-Phong model, whose alpha is its largest color.
-    Specular {
-        /// The specular constant `ks`.
-        constant: f32,
-        /// The specular exponent.
-        exponent: f32,
-    },
-}
-
-#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-/// The light source of [`Step::Lighting`], in user space.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Light {
-    /// An infinitely distant light.
-    Distant {
-        /// The unit vector pointing to the light.
-        direction: [f32; 3],
-    },
-    /// A positional light.
-    Point {
-        /// The position.
-        position: [f32; 3],
-    },
-    /// A positional light projecting a cone.
-    Spot {
-        /// The position.
-        position: [f32; 3],
-        /// The unit vector the light points along, or zero if it points at itself.
-        direction: [f32; 3],
-        /// The exponent controlling how focused the light is.
-        exponent: f32,
-        /// The cosine of the cone's half-angle, if the light has a cone.
-        cone: Option<f32>,
-    },
-}
 
 /// A scale and translation that maps user space to pixels.
 #[derive(Debug, Clone, Copy, PartialEq)]

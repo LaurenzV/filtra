@@ -18,6 +18,7 @@ unexpected_cfgs = { level = "warn", check-cfg = ["cfg(disable_dispatch_avx2)"] }
 
 [dependencies]
 fearless_simd = { version = "1.2.0", default-features = false, features = ["std"] }
+filtra_core = { workspace = true }
 filtra_types = { workspace = true }
 
 [features]
@@ -44,12 +45,12 @@ color-matrix = []
 component-transfer = []
 composite = ["filtra_types/composite"]
 convolve-matrix = ["filtra_types/convolve-matrix"]
-diffuse-lighting = []
+diffuse-lighting = ["filtra_core/lighting"]
 displacement-map = ["filtra_types/displacement-map"]
 drop-shadow = ["gaussian-blur", "color-matrix", "merge"]
-gaussian-blur = []
+gaussian-blur = ["filtra_core/gaussian-blur"]
 merge = []
 morphology = ["filtra_types/morphology"]
-specular-lighting = []
+specular-lighting = ["filtra_core/lighting"]
 tile = []
 turbulence = []

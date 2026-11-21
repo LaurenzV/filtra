@@ -1,22 +1,22 @@
 use super::{Backend, PixmapMut};
 #[cfg(feature = "convolve-matrix")]
 use filtra_kernels::Convolution;
-use filtra_kernels::{ColorSpace, IntRect, Source, Target};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-use filtra_kernels::{Light, Lighting, Reflection};
+use filtra_kernels::Lighting;
+use filtra_kernels::{IntRect, Source, Target};
 use filtra_plan::{ImageId, Pass, Plan, Step};
 
 pub(super) fn execute(
     plan: &Plan,
     pixmap: PixmapMut<'_>,
     backend: &mut Backend,
-    render_image: &mut dyn FnMut(usize, filtra_plan::IntRect, &mut [u8]),
+    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
 ) {
     let assignment = filtra_plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
     let mut images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
         .map(|(&rect, buffer)| Image {
             location: buffer.map_or(Location::Source, Location::Buffer),
-            rect: kernel_rect(rect),
+            rect,
         })
         .collect();
 
@@ -152,15 +152,14 @@ impl<'a> Inputs<'a> {
 fn execute_step(
     step: &Step,
     store: &mut Store<'_>,
-    render_image: &mut dyn FnMut(usize, filtra_plan::IntRect, &mut [u8]),
+    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
 ) {
     match step {
         Step::Alpha { src, dst } => store.write(*dst, |inputs, target| {
             filtra_kernels::alpha(inputs.read(*src), target);
         }),
         Step::Convert { src, dst, from, to } => store.write(*dst, |inputs, target| {
-            let (from, to) = (color_space(*from), color_space(*to));
-            filtra_kernels::convert(inputs.read(*src), target, from, to);
+            filtra_kernels::convert(inputs.read(*src), target, *from, *to);
         }),
         Step::Flood { dst, color } => store.write(*dst, |_, target| {
             filtra_kernels::flood(target, *color);
@@ -170,7 +169,6 @@ fn execute_step(
             data.fill(0);
 
             if !rect.is_empty() {
-                let rect = filtra_plan::IntRect::new(rect.x0, rect.y0, rect.x1, rect.y1);
                 render_image(*image, rect, data);
             }
         }
@@ -179,8 +177,7 @@ fn execute_step(
         }),
         #[cfg(feature = "tile")]
         Step::Tile { src, cell, dst } => store.write(*dst, |inputs, target| {
-            let cell = kernel_rect(*cell);
-            filtra_kernels::tile(inputs.read(*src), target, cell);
+            filtra_kernels::tile(inputs.read(*src), target, *cell);
         }),
         #[cfg(feature = "composite")]
         Step::Composite {
@@ -245,7 +242,7 @@ fn execute_step(
                 base_frequency: *base_frequency,
                 octaves: *octaves,
                 seed: *seed,
-                stitch_tile: stitch_tile.map(kernel_rect),
+                stitch_tile: *stitch_tile,
                 fractal_noise: *fractal_noise,
                 origin: *origin,
             };
@@ -297,30 +294,9 @@ fn execute_step(
             origin,
         } => store.write(*dst, |inputs, output| {
             let lighting = Lighting {
-                reflection: match *reflection {
-                    filtra_plan::Reflection::Diffuse { constant } => {
-                        Reflection::Diffuse { constant }
-                    }
-                    filtra_plan::Reflection::Specular { constant, exponent } => {
-                        Reflection::Specular { constant, exponent }
-                    }
-                },
+                reflection: *reflection,
                 surface_scale: *surface_scale,
-                light: match *light {
-                    filtra_plan::Light::Distant { direction } => Light::Distant { direction },
-                    filtra_plan::Light::Point { position } => Light::Point { position },
-                    filtra_plan::Light::Spot {
-                        position,
-                        direction,
-                        exponent,
-                        cone,
-                    } => Light::Spot {
-                        position,
-                        direction,
-                        exponent,
-                        cone,
-                    },
-                },
+                light: *light,
                 color: *color,
                 scale: *scale,
                 origin: *origin,
@@ -346,15 +322,4 @@ fn sized(data: &mut Vec<u8>, rect: IntRect) -> &mut [u8] {
 
 fn len(rect: IntRect) -> usize {
     rect.width() as usize * rect.height() as usize * 4
-}
-
-fn kernel_rect(rect: filtra_plan::IntRect) -> IntRect {
-    IntRect::new(rect.x0, rect.y0, rect.x1, rect.y1)
-}
-
-fn color_space(space: filtra_plan::ColorSpace) -> ColorSpace {
-    match space {
-        filtra_plan::ColorSpace::Srgb => ColorSpace::Srgb,
-        filtra_plan::ColorSpace::LinearRgb => ColorSpace::LinearRgb,
-    }
 }

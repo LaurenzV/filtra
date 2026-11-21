@@ -1,16 +1,7 @@
 use std::sync::OnceLock;
 
 use crate::pixmap::for_each_segment;
-use crate::{Source, Target};
-
-/// The color space of a pixmap's color values.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ColorSpace {
-    /// Gamma-encoded sRGB.
-    Srgb,
-    /// Linear-light sRGB.
-    LinearRgb,
-}
+use crate::{ColorSpace, Source, Target};
 
 /// The conversion between the color spaces of `color-interpolation-filters`.
 pub fn convert(src: Source<'_>, mut dst: Target<'_>, from: ColorSpace, to: ColorSpace) {
