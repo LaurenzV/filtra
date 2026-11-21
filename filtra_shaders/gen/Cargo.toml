@@ -1,0 +1,13 @@
+[package]
+name = "filtra_shaders_gen"
+description = "Generates the GLSL and the combined WGSL of `filtra_shaders`."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+naga = { version = "30.0.1", features = ["wgsl-in", "wgsl-out", "glsl-out"] }
+wesl = "0.4.0"

@@ -22,6 +22,7 @@ you need enabled.
 | [`filtra_plan`](filtra_plan) | Turns a filter into backend-independent steps on pixel images. | [![crates.io](https://img.shields.io/crates/v/filtra_plan.svg)](https://crates.io/crates/filtra_plan) [![docs.rs](https://img.shields.io/docsrs/filtra_plan.svg)](https://docs.rs/filtra_plan) |
 | [`filtra_core`](filtra_core) | Internal: pixel-level types and algorithms shared by the other crates. | [![crates.io](https://img.shields.io/crates/v/filtra_core.svg)](https://crates.io/crates/filtra_core) [![docs.rs](https://img.shields.io/docsrs/filtra_core.svg)](https://docs.rs/filtra_core) |
 | [`filtra_kernels`](filtra_kernels) | The CPU kernels that execute the steps. | [![crates.io](https://img.shields.io/crates/v/filtra_kernels.svg)](https://crates.io/crates/filtra_kernels) [![docs.rs](https://img.shields.io/docsrs/filtra_kernels.svg)](https://docs.rs/filtra_kernels) |
+| [`filtra_shaders`](filtra_shaders) | The shaders of the GPU passes, in WGSL and GLSL. | [![crates.io](https://img.shields.io/crates/v/filtra_shaders.svg)](https://crates.io/crates/filtra_shaders) [![docs.rs](https://img.shields.io/docsrs/filtra_shaders.svg)](https://docs.rs/filtra_shaders) |
 
 ## Notes
 

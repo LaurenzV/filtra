@@ -27,7 +27,15 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.89
-      - run: cargo check -p filtra -p filtra_types -p filtra_core -p filtra_plan -p filtra_kernels
+      - run: cargo check -p filtra -p filtra_types -p filtra_core -p filtra_plan -p filtra_kernels -p filtra_shaders
+
+  shaders:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo run -p filtra_shaders_gen
+      - run: git diff --exit-code
 
   test:
     name: test (${{ matrix.name }})
