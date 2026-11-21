@@ -11,6 +11,8 @@
 //! Every step writes all pixels of its destination image. Pixels outside of a source image are
 //! transparent black.
 
+#![forbid(unsafe_code)]
+
 mod buffers;
 mod planner;
 mod rect;
