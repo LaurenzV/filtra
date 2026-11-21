@@ -163,7 +163,8 @@ fn sliding<'i, 'o, S: Simd>(
             let transparent = i >= hi || stored == 0 || (i < lo && !dilate);
             (!transparent).then(|| &suffixes[(i.max(lo) - lo) as usize * len..][..len])
         };
-        let mut covered = Prefix::Empty;
+
+        prefix.fill(if dilate { 0 } else { u8::MAX });
 
         for j in 0..window {
             let Some(output) = outputs.next() else {
@@ -171,37 +172,14 @@ fn sliding<'i, 'o, S: Simd>(
             };
 
             if j > 0 {
-                covered = match (row(block + window + j - 1), covered) {
-                    (Some(current), Prefix::Rows) => {
-                        accumulate(simd, dilate, Some(current), prefix);
-                        Prefix::Rows
-                    }
-                    (Some(current), Prefix::Empty) => {
-                        prefix.copy_from_slice(current);
-                        Prefix::Rows
-                    }
-                    (_, Prefix::Transparent) => Prefix::Transparent,
-                    (None, covered) if dilate => covered,
-                    (None, _) => Prefix::Transparent,
-                };
+                accumulate(simd, dilate, row(block + window + j - 1), prefix);
             }
 
-            match covered {
-                Prefix::Empty => assign(suffix(block + j), output),
-                Prefix::Rows => min_max(simd, dilate, suffix(block + j), Some(prefix), output),
-                Prefix::Transparent => output.fill(0),
-            }
+            min_max(simd, dilate, suffix(block + j), Some(prefix), output);
         }
 
         block += window;
     }
-}
-
-#[derive(Clone, Copy)]
-enum Prefix {
-    Empty,
-    Rows,
-    Transparent,
 }
 
 fn assign(row: Option<&[u8]>, output: &mut [u8]) {
