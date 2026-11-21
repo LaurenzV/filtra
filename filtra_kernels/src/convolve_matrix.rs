@@ -2,7 +2,7 @@ use fearless_simd::{Simd, f32x8, prelude::*};
 use filtra_types::EdgeMode;
 
 use crate::dispatch::dispatch;
-use crate::simd::{for_each_chunk, pack, premultiply, unpack, unpremultiply};
+use crate::simd::{for_each_output_chunk, pack, premultiply, unpack, unpremultiply};
 use crate::{IntRect, Source, Target};
 
 /// The parameters of [`convolve_matrix`].
@@ -37,11 +37,16 @@ pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convoluti
         "the target is outside the weights"
     );
 
-    dispatch!(simd => convolve(simd, src, dst, convolution));
+    dispatch!(simd => convolve_matrix_inner(simd, src, dst, convolution));
 }
 
 #[inline(always)]
-fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution: &Convolution<'_>) {
+fn convolve_matrix_inner<S: Simd>(
+    simd: S,
+    src: Source<'_>,
+    mut dst: Target<'_>,
+    convolution: &Convolution<'_>,
+) {
     let rect = dst.rect();
 
     if rect.is_empty() {
@@ -83,9 +88,9 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
 
         let center = slots[convolution.target[1] as usize] + 3 * input.stride + input.target_x;
 
-        for_each_chunk::<0>([], output, {
+        for_each_output_chunk(output, {
             #[inline(always)]
-            |i, [], output: &mut [u8; 32]| {
+            |i, output: &mut [u8; 32]| {
                 let x = 8 * i;
                 let mut sums = [f32x8::splat(simd, 0.0); 4];
 

@@ -1,7 +1,7 @@
 use fearless_simd::{Simd, f32x4, f32x8, prelude::*};
 
 use crate::dispatch::dispatch;
-use crate::simd::{for_each_chunk, pack, premultiply};
+use crate::simd::{for_each_output_chunk, pack, premultiply};
 use crate::{IntRect, Target};
 
 /// Perlin turbulence (`feTurbulence`).
@@ -26,7 +26,7 @@ pub fn turbulence(dst: Target<'_>, turbulence: &Turbulence) {
     let lattice = Lattice::new(turbulence.seed);
     let noise = Noise::new(turbulence);
 
-    dispatch!(simd => render(simd, &lattice, &noise, dst));
+    dispatch!(simd => turbulence_inner(simd, &lattice, &noise, dst));
 }
 
 // The spec allows clamping the number of octaves (§9.21); later octaves change the result by
@@ -42,7 +42,7 @@ const RAND_Q: i64 = 127773;
 const RAND_R: i64 = 2836;
 
 #[inline(always)]
-fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_>) {
+fn turbulence_inner<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_>) {
     let rect = dst.rect();
     let select = {
         #[inline(always)]
@@ -110,9 +110,9 @@ fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_
             factor *= 2.0;
         }
 
-        for_each_chunk::<0>([], row, {
+        for_each_output_chunk(row, {
             #[inline(always)]
-            |i, [], pixels: &mut [u8; 32]| {
+            |i, pixels: &mut [u8; 32]| {
                 let sums = &sums[i * 32..][..32];
                 let load = {
                     #[inline(always)]

@@ -1,7 +1,7 @@
 use fearless_simd::{Simd, f32x8, prelude::*};
 
 use crate::dispatch::dispatch;
-use crate::simd::{for_each_chunk, pack, pow};
+use crate::simd::{for_each_output_chunk, pack, pow};
 use crate::{IntRect, Light, Reflection, Source, Target};
 
 /// Lighting of the alpha of an image as a height map (`feDiffuseLighting`, `feSpecularLighting`).
@@ -143,9 +143,9 @@ fn shade<S: Simd>(
     let user_y = (rect.y0 as f32 + y as f32 - lighting.origin[1]) / scale_y;
     let [red, green, blue] = lighting.color;
 
-    for_each_chunk::<0>([], output, {
+    for_each_output_chunk(output, {
         #[inline(always)]
-        |i, [], output: &mut [u8; 32]| {
+        |i, output: &mut [u8; 32]| {
             let x = 8 * i;
             let load = {
                 #[inline(always)]
