@@ -66,6 +66,8 @@ fn convolve_matrix_inner<S: Simd>(
     let channels = if preserve_alpha { 3 } else { 4 };
     let bias = f32x8::splat(simd, convolution.bias);
     let mut slots = vec![0; rows];
+    // Rows are converted in whole chunks, so the pixels past the width stay transparent.
+    let mut pixels = vec![0; input.width.next_multiple_of(8) * 4];
 
     for (y, (_, output)) in dst.rows_mut().enumerate() {
         for (i, slot) in slots.iter_mut().enumerate() {
@@ -79,7 +81,7 @@ fn convolve_matrix_inner<S: Simd>(
 
             if held[index] != Some(input_row) {
                 let planes = &mut cache[index * slot_len..][..slot_len];
-                input.fill(simd, src, input_row, planes, preserve_alpha);
+                input.fill(simd, src, input_row, &mut pixels, planes, preserve_alpha);
                 held[index] = Some(input_row);
             }
 
@@ -167,6 +169,7 @@ impl ExtendedRows {
         simd: S,
         src: Source<'_>,
         row: Option<usize>,
+        pixels: &mut [u8],
         planes: &mut [f32],
         preserve_alpha: bool,
     ) {
@@ -176,29 +179,22 @@ impl ExtendedRows {
             return;
         };
 
-        let source = src.rect();
-        let (x0, x1) = (self.rect.x0.max(source.x0), self.rect.x1.min(source.x1));
+        let y = i64::from(self.rect.y0) + row as i64;
+        src.copy_row(y, self.rect.x0.into(), &mut pixels[..self.width * 4]);
 
-        if let Some(pixels) = src.row(self.rect.y0 + row as i32, x0, x1) {
-            let start = self.target_x + (x0 - self.rect.x0) as usize;
-            let (chunks, tail) = pixels.as_chunks::<32>();
-            let mut padded = [0; 32];
-            padded[..tail.len()].copy_from_slice(tail);
-            let padded = (!tail.is_empty()).then_some(&padded);
+        for (k, chunk) in pixels.as_chunks::<32>().0.iter().enumerate() {
+            let start = self.target_x + 8 * k;
+            let channels = unpack(simd, chunk);
+            let values = if preserve_alpha {
+                unpremultiply(channels)
+            } else {
+                let [r, g, b, a] = channels;
+                let scale = 1.0 / 255.0;
+                [r * scale, g * scale, b * scale, a * scale]
+            };
 
-            for (k, chunk) in chunks.iter().chain(padded).enumerate() {
-                let channels = unpack(simd, chunk);
-                let values = if preserve_alpha {
-                    unpremultiply(channels)
-                } else {
-                    let [r, g, b, a] = channels;
-                    let scale = 1.0 / 255.0;
-                    [r * scale, g * scale, b * scale, a * scale]
-                };
-
-                for (channel, value) in values.into_iter().enumerate() {
-                    value.store_slice(&mut planes[channel * self.stride + start + 8 * k..][..8]);
-                }
+            for (channel, value) in values.into_iter().enumerate() {
+                value.store_slice(&mut planes[channel * self.stride + start..][..8]);
             }
         }
 
