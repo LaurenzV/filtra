@@ -13,12 +13,14 @@ repository.workspace = true
 all-features = true
 
 [dependencies]
-filtra_kernels = { workspace = true }
+filtra_core = { workspace = true, optional = true }
+filtra_kernels = { workspace = true, optional = true }
 filtra_types = { workspace = true }
 filtra_plan = { workspace = true }
+filtra_shaders = { workspace = true, optional = true }
 
 [features]
-default = ["all"]
+default = ["all", "cpu"]
 all = [
     "blend",
     "color-matrix",
@@ -37,20 +39,24 @@ all = [
     "tile",
     "turbulence",
 ]
+# Enables the CPU backend of `filtra`.
+cpu = ["dep:filtra_kernels"]
+# Enables the GPU backend of `filtra`.
+gpu = ["dep:filtra_core", "dep:filtra_shaders"]
 css-functions = ["color-matrix", "component-transfer", "drop-shadow", "gaussian-blur"]
-blend = ["filtra_plan/blend", "filtra_kernels/blend"]
-color-matrix = ["filtra_plan/color-matrix", "filtra_kernels/color-matrix"]
-component-transfer = ["filtra_plan/component-transfer", "filtra_kernels/component-transfer"]
-composite = ["filtra_plan/composite", "filtra_kernels/composite"]
-convolve-matrix = ["filtra_plan/convolve-matrix", "filtra_kernels/convolve-matrix"]
-diffuse-lighting = ["filtra_plan/diffuse-lighting", "filtra_kernels/diffuse-lighting"]
-displacement-map = ["filtra_plan/displacement-map", "filtra_kernels/displacement-map"]
-drop-shadow = ["filtra_plan/drop-shadow", "filtra_kernels/drop-shadow"]
+blend = ["filtra_plan/blend", "filtra_kernels?/blend"]
+color-matrix = ["filtra_plan/color-matrix", "filtra_kernels?/color-matrix"]
+component-transfer = ["filtra_plan/component-transfer", "filtra_kernels?/component-transfer"]
+composite = ["filtra_plan/composite", "filtra_kernels?/composite"]
+convolve-matrix = ["filtra_plan/convolve-matrix", "filtra_kernels?/convolve-matrix"]
+diffuse-lighting = ["filtra_plan/diffuse-lighting", "filtra_kernels?/diffuse-lighting"]
+displacement-map = ["filtra_plan/displacement-map", "filtra_kernels?/displacement-map"]
+drop-shadow = ["filtra_plan/drop-shadow", "filtra_kernels?/drop-shadow"]
 flood = ["filtra_plan/flood"]
-gaussian-blur = ["filtra_plan/gaussian-blur", "filtra_kernels/gaussian-blur"]
-merge = ["filtra_plan/merge", "filtra_kernels/merge"]
-morphology = ["filtra_plan/morphology", "filtra_kernels/morphology"]
+gaussian-blur = ["filtra_plan/gaussian-blur", "filtra_kernels?/gaussian-blur", "filtra_core?/gaussian-blur"]
+merge = ["filtra_plan/merge", "filtra_kernels?/merge"]
+morphology = ["filtra_plan/morphology", "filtra_kernels?/morphology"]
 offset = ["filtra_plan/offset"]
-specular-lighting = ["filtra_plan/specular-lighting", "filtra_kernels/specular-lighting"]
-tile = ["filtra_plan/tile", "filtra_kernels/tile"]
-turbulence = ["filtra_plan/turbulence", "filtra_kernels/turbulence"]
+specular-lighting = ["filtra_plan/specular-lighting", "filtra_kernels?/specular-lighting"]
+tile = ["filtra_plan/tile", "filtra_kernels?/tile"]
+turbulence = ["filtra_plan/turbulence", "filtra_kernels?/turbulence"]

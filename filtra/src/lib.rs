@@ -31,7 +31,10 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "cpu")]
 pub mod cpu;
+#[cfg(feature = "gpu")]
+pub mod gpu;
 
 pub use filtra_plan as plan;
 pub use filtra_plan::{IntRect, Transform};

@@ -1,0 +1,10 @@
+[package]
+name = "filtra_shaders"
+description = "The shaders of filtra's GPU passes, in WGSL and GLSL ES 3.00."
+categories = ["graphics", "rendering"]
+keywords = ["svg", "css", "filter", "shader", "webgl"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
