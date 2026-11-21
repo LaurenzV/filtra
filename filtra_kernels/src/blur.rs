@@ -1,11 +1,12 @@
 use core::ops::Range;
 
 use fearless_simd::{Simd, prelude::*, u8x32, u16x16, u32x8};
+use filtra_core::blur::{Axis, Layout, Span, spans};
 
 use crate::dispatch::dispatch;
 use crate::mul_q15::MulQ15;
 use crate::simd::Wide;
-use crate::{IntRect, Source, Target};
+use crate::{Source, Target};
 
 /// `feGaussianBlur` and `blur()`, with the standard deviations in pixels.
 pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
@@ -21,8 +22,6 @@ pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
 const CHUNK: usize = 8;
 /// Transparent pixels on each side of every row of an intermediate image.
 const PAD: usize = 32;
-/// Beyond this, a blur spreads any image too thin to leave a visible pixel.
-const MAX_STD_DEV: f32 = 1e11;
 const MAX_TAPS: usize = 13;
 /// The fractional bits of a horizontal Gaussian, which leave room for the sum of two of them.
 const GAUSS_FRACTION: u32 = 6;
@@ -57,7 +56,7 @@ fn blur<S: MulQ15>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) 
 
     let passes = (0..levels)
         .map(|level| (resampling(level, Op::Halve), down(level + 1)))
-        .chain([(axes.each_ref().map(Axis::op), up(levels))])
+        .chain([(axes.each_ref().map(gauss), up(levels))])
         .chain(
             (0..levels)
                 .rev()
@@ -84,170 +83,10 @@ fn blur<S: MulQ15>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) 
     fill_target(simd, input, last_ops, last_spans, dst);
 }
 
-struct Axis {
-    halvings: usize,
-    /// The weight of the centre followed by those of the distances 1, 2, …, summing to 2^15 over
-    /// both sides; empty for an axis that isn't blurred.
-    weights: Vec<u16>,
-}
-
-impl Axis {
-    fn new(std_dev: f32) -> Self {
-        if std_dev.is_nan() || std_dev <= 0.0 {
-            return Self {
-                halvings: 0,
-                weights: Vec::new(),
-            };
-        }
-
-        let std_dev = f64::from(std_dev.min(MAX_STD_DEV));
-        let mut variance = std_dev * std_dev;
-        let mut halvings = 0;
-
-        while variance > 4.0 {
-            variance = (variance - 1.5) / 4.0;
-            halvings += 1;
-        }
-
-        let radius = (3.0 * variance.sqrt()).ceil() as usize;
-        let exact: Vec<f64> = (0..=radius)
-            .map(|i| (-((i * i) as f64) / (2.0 * variance)).exp())
-            .collect();
-        let total = exact[0] + 2.0 * exact[1..].iter().sum::<f64>();
-        let mut weights: Vec<u16> = exact
-            .iter()
-            .map(|w| (w / total * 32768.0).round() as u16)
-            .collect();
-        let sum =
-            u32::from(weights[0]) + 2 * weights[1..].iter().map(|&w| u32::from(w)).sum::<u32>();
-        // The rounding error goes to the centre. A lone centre weight of 2^15 doesn't fit the
-        // 15-bit range, and 2^15 - 1 leaves every 8-bit value unchanged.
-        weights[0] = (u32::from(weights[0]) + 32768 - sum).min(32767) as u16;
-
-        Self { halvings, weights }
-    }
-
-    fn op(&self) -> Op<'_> {
-        match self.weights.as_slice() {
-            [] => Op::Copy,
-            weights => Op::Gauss(weights),
-        }
-    }
-}
-
-/// Columns or rows from `.0` inclusive to `.1` exclusive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Span(i64, i64);
-
-impl Span {
-    const EMPTY: Span = Span(0, 0);
-
-    fn new(start: i64, end: i64) -> Span {
-        if start < end {
-            Span(start, end)
-        } else {
-            Self::EMPTY
-        }
-    }
-
-    fn len(self) -> usize {
-        (self.1 - self.0) as usize
-    }
-
-    fn is_empty(self) -> bool {
-        self.0 >= self.1
-    }
-
-    fn contains(self, i: i64) -> bool {
-        (self.0..self.1).contains(&i)
-    }
-
-    fn intersect(self, other: Span) -> Span {
-        Span::new(self.0.max(other.0), self.1.min(other.1))
-    }
-
-    fn grow(self, by: i64) -> Span {
-        self.map(|a, b| (a - by, b + by))
-    }
-
-    /// The pixels that halving this span makes non-zero.
-    fn halved(self) -> Span {
-        self.map(|a, b| ((a - 1).div_euclid(2), b.div_euclid(2) + 1))
-    }
-
-    /// The pixels that doubling this span makes non-zero, which are also the pixels that halving
-    /// reads for it.
-    fn doubled(self) -> Span {
-        self.map(|a, b| (2 * a - 1, 2 * b + 1))
-    }
-
-    /// The coarser pixels that doubling into this span reads.
-    fn doubling_reads(self) -> Span {
-        self.map(|a, b| (a.div_euclid(2) - 1, (b - 1).div_euclid(2) + 2))
-    }
-
-    fn map(self, f: impl FnOnce(i64, i64) -> (i64, i64)) -> Span {
-        if self.is_empty() {
-            return Self::EMPTY;
-        }
-
-        let (a, b) = f(self.0, self.1);
-        Span::new(a, b)
-    }
-}
-
-fn spans(rect: IntRect) -> [Span; 2] {
-    let span = |a: i32, b: i32| Span::new(a.into(), b.into());
-
-    [span(rect.x0, rect.x1), span(rect.y0, rect.y1)]
-}
-
-/// The pixels each pass computes along one axis.
-struct Layout {
-    /// The halved levels, indexed by level from 1.
-    down: Vec<Span>,
-    /// The Gaussian on the coarsest level and the levels doubled from it, indexed by level.
-    up: Vec<Span>,
-}
-
-impl Layout {
-    fn new(axis: &Axis, levels: usize, source: Span, target: Span) -> Self {
-        let resampled = |level: usize, span: Span, resample: fn(Span) -> Span| {
-            if level < axis.halvings {
-                resample(span)
-            } else {
-                span
-            }
-        };
-        let mut data = vec![source];
-        let mut needed = vec![target];
-
-        for level in 0..levels {
-            data.push(resampled(level, data[level], Span::halved));
-            needed.push(resampled(level, needed[level], Span::doubling_reads));
-        }
-
-        let radius = axis.weights.len().saturating_sub(1) as i64;
-        let gauss = needed[levels].intersect(data[levels].grow(radius));
-        let mut down = vec![Span::EMPTY; levels + 1];
-
-        if levels > 0 {
-            down[levels] = gauss.grow(radius).intersect(data[levels]);
-        }
-
-        for level in (1..levels).rev() {
-            let read = resampled(level, down[level + 1], Span::doubled);
-            down[level] = read.intersect(data[level]);
-        }
-
-        let mut up = vec![gauss; levels + 1];
-
-        for level in (0..levels).rev() {
-            let spread = resampled(level, up[level + 1], Span::doubled);
-            up[level] = needed[level].intersect(spread);
-        }
-
-        Self { down, up }
+fn gauss(axis: &Axis) -> Op<'_> {
+    match axis.weights.as_slice() {
+        [] => Op::Copy,
+        weights => Op::Gauss(weights),
     }
 }
 

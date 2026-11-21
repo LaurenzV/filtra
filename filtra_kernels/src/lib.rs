@@ -41,7 +41,6 @@ mod offset;
 // Some of the shared helpers go unused when only some primitives are enabled.
 #[cfg_attr(not(feature = "all"), allow(dead_code, unused_imports))]
 mod pixmap;
-mod rect;
 #[cfg_attr(not(feature = "all"), allow(dead_code, unused_imports))]
 mod simd;
 #[cfg(feature = "tile")]
@@ -56,7 +55,7 @@ pub use blend::blend;
 pub use blur::gaussian_blur;
 #[cfg(feature = "color-matrix")]
 pub use color_matrix::color_matrix;
-pub use color_space::{ColorSpace, convert};
+pub use color_space::convert;
 #[cfg(feature = "component-transfer")]
 pub use component_transfer::component_transfer;
 #[cfg(feature = "composite")]
@@ -67,19 +66,21 @@ pub use convolve_matrix::{Convolution, convolve_matrix};
 pub use displacement_map::displacement_map;
 pub use flood::flood;
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-pub use lighting::{Light, Lighting, Reflection, lighting};
+pub use lighting::{Lighting, lighting};
 #[cfg(feature = "merge")]
 pub use merge::merge;
 #[cfg(feature = "morphology")]
 pub use morphology::morphology;
 pub use offset::offset;
 pub use pixmap::{Source, Target};
-pub use rect::IntRect;
 #[cfg(feature = "tile")]
 pub use tile::tile;
 #[cfg(feature = "turbulence")]
 pub use turbulence::{Turbulence, turbulence};
 
+pub use filtra_core::{ColorSpace, IntRect};
+#[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
+pub use filtra_core::{Light, Reflection};
 #[cfg(feature = "blend")]
 pub use filtra_types::BlendMode;
 #[cfg(feature = "displacement-map")]

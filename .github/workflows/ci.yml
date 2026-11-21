@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.89
-      - run: cargo check -p filtra -p filtra_types -p filtra_plan -p filtra_kernels
+      - run: cargo check -p filtra -p filtra_types -p filtra_core -p filtra_plan -p filtra_kernels
 
   test:
     name: test (${{ matrix.name }})

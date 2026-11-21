@@ -110,10 +110,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "filtra_core"
+version = "0.1.0"
+
+[[package]]
 name = "filtra_kernels"
 version = "0.1.0"
 dependencies = [
  "fearless_simd 1.2.0",
+ "filtra_core",
  "filtra_types",
 ]
 
@@ -121,6 +126,7 @@ dependencies = [
 name = "filtra_plan"
 version = "0.1.0"
 dependencies = [
+ "filtra_core",
  "filtra_types",
 ]
 

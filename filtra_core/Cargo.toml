@@ -1,0 +1,19 @@
+[package]
+name = "filtra_core"
+description = "Pixel-level types and algorithms shared by the crates of filtra."
+categories = ["graphics", "rendering"]
+keywords = ["svg", "css", "filter"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+default = ["all"]
+all = ["gaussian-blur", "lighting"]
+gaussian-blur = []
+lighting = []
