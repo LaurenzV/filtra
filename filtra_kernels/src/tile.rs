@@ -16,8 +16,8 @@ pub fn tile(src: Source<'_>, mut dst: Target<'_>, cell: IntRect) {
         let filled = period.min(row.len());
         let head = ((i64::from(cell.x1) - i64::from(first)) * 4).min(filled as i64) as usize;
 
-        read(src, source_y, first, &mut row[..head]);
-        read(src, source_y, cell.x0, &mut row[head..filled]);
+        src.copy_row(source_y.into(), first.into(), &mut row[..head]);
+        src.copy_row(source_y.into(), cell.x0.into(), &mut row[head..filled]);
         repeat(row, filled);
     }
 
@@ -26,26 +26,6 @@ pub fn tile(src: Source<'_>, mut dst: Target<'_>, cell: IntRect) {
 
 fn wrap(x: i32, start: i32, len: u32) -> i32 {
     (i64::from(start) + (i64::from(x) - i64::from(start)).rem_euclid(i64::from(len))) as i32
-}
-
-fn read(src: Source<'_>, y: i32, x0: i32, out: &mut [u8]) {
-    let source = src.rect();
-    let x1 = i64::from(x0) + (out.len() / 4) as i64;
-    let from = i64::from(x0).max(i64::from(source.x0)).min(x1);
-    let to = x1.min(i64::from(source.x1)).max(from);
-    let (start, end) = (
-        (from - i64::from(x0)) as usize * 4,
-        (to - i64::from(x0)) as usize * 4,
-    );
-
-    out[..start].fill(0);
-
-    match src.row(y, from as i32, to as i32) {
-        Some(source_row) => out[start..end].copy_from_slice(source_row),
-        None => out[start..end].fill(0),
-    }
-
-    out[end..].fill(0);
 }
 
 fn repeat(data: &mut [u8], mut filled: usize) {

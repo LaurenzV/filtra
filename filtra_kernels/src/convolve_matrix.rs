@@ -49,17 +49,14 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
     }
 
     // The rows of the input that the weights cover, extended by the edge mode, are kept as
-    // channel planes of `f32`: in a ring with one slot per row of weights, or with one slot per
-    // row of the input (and one for rows that `none` leaves transparent) if the weights are
-    // taller than it. Each chunk of 8 output pixels then sums its weighted neighbors in registers.
+    // channel planes of `f32` in a ring with one slot per row of weights. Each chunk of 8 output
+    // pixels then sums its weighted neighbors in registers.
     let [columns, rows] = convolution.size.map(|n| n as usize);
     let height = rect.height() as usize;
     let input = ExtendedRows::new(rect, convolution);
-    let every_row = rows > height;
     let slot_len = 4 * input.stride;
-    let capacity = if every_row { height + 1 } else { rows };
-    let mut cache = vec![0.0; capacity * slot_len];
-    let mut held = vec![None; capacity];
+    let mut cache = vec![0.0; rows * slot_len];
+    let mut held = vec![None; rows];
     let preserve_alpha = convolution.preserve_alpha;
     let channels = if preserve_alpha { 3 } else { 4 };
     let bias = f32x8::splat(simd, convolution.bias);
@@ -73,11 +70,7 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
                 height,
                 convolution.edge_mode,
             );
-            let index = if every_row {
-                input_row.unwrap_or(height)
-            } else {
-                row % rows
-            };
+            let index = row % rows;
 
             if held[index] != Some(input_row) {
                 let planes = &mut cache[index * slot_len..][..slot_len];

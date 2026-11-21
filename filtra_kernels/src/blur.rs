@@ -1,5 +1,3 @@
-use core::ops::Range;
-
 use fearless_simd::{Simd, prelude::*, u8x32, u16x16, u32x8};
 use filtra_core::blur::{self, Blur, Span, spans};
 
@@ -192,20 +190,15 @@ struct Pass<'a, S: MulQ15> {
     x: Span,
     /// The column of the first horizontal result.
     first: i64,
-    parts: Vec<Part>,
+    /// The input columns that the horizontal step reads.
+    reads: Span,
+    /// A source row over `reads`, which may reach outside of it.
+    padded: Vec<u8>,
     /// Horizontal results in a ring, with the input row each one holds.
     rows: Vec<Vec<[u16; 32]>>,
     held: Vec<Option<i64>>,
     /// The vertical result of the chunks that don't fit the output whole.
     staging: Vec<[u8; 32]>,
-}
-
-/// Chunks of the horizontal step that read the input row in the same way.
-struct Part {
-    chunks: Range<usize>,
-    /// The source columns that the chunks read, padded with transparent pixels; `None` if they
-    /// lie inside of the input row.
-    copy: Option<Vec<u8>>,
 }
 
 impl<'a, S: MulQ15> Pass<'a, S> {
@@ -219,39 +212,10 @@ impl<'a, S: MulQ15> Pass<'a, S> {
         let chunks = groups * group;
         let ring = ops[1].rows(0).1;
 
-        let parts = match input {
-            Input::Plane(_) => vec![Part {
-                chunks: 0..chunks,
-                copy: None,
-            }],
-            Input::Source(src) => {
-                // Only the chunks near the edges of the source read past them, so only their
-                // columns are copied.
-                let [source, _] = spans(src.rect());
-                let reads = |groups: Range<usize>| {
-                    let start = first + (groups.start * group * CHUNK) as i64;
-                    ops[0].reads(start, start + (groups.len() * group * CHUNK) as i64)
-                };
-                let inside = |g: usize| {
-                    let reads = reads(g..g + 1);
-                    reads.0 >= source.0 && reads.1 <= source.1
-                };
-                let start = (0..groups).find(|&g| inside(g)).unwrap_or(groups);
-                let end = (start..groups).find(|&g| !inside(g)).unwrap_or(groups);
-                let part = |groups: Range<usize>, copied: bool| Part {
-                    copy: copied.then(|| vec![0; reads(groups.clone()).len() * 4]),
-                    chunks: groups.start * group..groups.end * group,
-                };
-
-                [
-                    part(0..start, true),
-                    part(start..end, false),
-                    part(end..groups, true),
-                ]
-                .into_iter()
-                .filter(|part| !part.chunks.is_empty())
-                .collect()
-            }
+        let reads = ops[0].reads(first, first + (chunks * CHUNK) as i64);
+        let padded = match input {
+            Input::Plane(_) => Vec::new(),
+            Input::Source(_) => vec![0; reads.len() * 4],
         };
 
         Self {
@@ -260,7 +224,8 @@ impl<'a, S: MulQ15> Pass<'a, S> {
             ops,
             x,
             first,
-            parts,
+            reads,
+            padded,
             rows: vec![vec![[0; 32]; chunks]; ring],
             held: vec![None; ring],
             staging: vec![[0; 32]; chunks],
@@ -334,39 +299,21 @@ impl<'a, S: MulQ15> Pass<'a, S> {
             return slot;
         }
 
-        for part in &mut self.parts {
-            let first = self.first + (part.chunks.start * CHUNK) as i64;
-            let reads = self.ops[0].reads(first, first + (part.chunks.len() * CHUNK) as i64);
-            let row = match self.input {
-                Input::Plane(plane) => plane.row(y),
-                Input::Source(src) => {
-                    let rect = src.rect();
-                    let x0 = reads.0.max(rect.x0.into());
-                    let x1 = reads.1.min(rect.x1.into());
-                    let row = i32::try_from(y)
-                        .ok()
-                        .filter(|_| x0 < x1)
-                        .and_then(|y| src.row(y, x0 as i32, x1 as i32));
+        let row = match self.input {
+            Input::Plane(plane) => plane.row(y),
+            Input::Source(src) => spans(src.rect())[1].contains(y).then(|| {
+                src.copy_row(y, self.reads.0, &mut self.padded);
+                (self.padded.as_slice(), self.reads.0)
+            }),
+        };
 
-                    row.map(|row| match &mut part.copy {
-                        Some(copy) => {
-                            let start = (x0 - reads.0) as usize * 4;
-                            copy[start..start + row.len()].copy_from_slice(row);
-                            (copy.as_slice(), reads.0)
-                        }
-                        None => (row, reads.0),
-                    })
-                }
-            };
-
-            horizontal(
-                self.simd,
-                self.ops[0],
-                row,
-                first,
-                &mut self.rows[slot][part.chunks.clone()],
-            );
-        }
+        horizontal(
+            self.simd,
+            self.ops[0],
+            row,
+            self.first,
+            &mut self.rows[slot],
+        );
 
         self.held[slot] = Some(y);
 
