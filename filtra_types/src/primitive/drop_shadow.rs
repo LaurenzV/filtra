@@ -2,6 +2,7 @@ use crate::Color;
 
 /// Draws a blurred, offset and colored copy of the input's alpha beneath it (`feDropShadow`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DropShadow {
     /// The offset along the x-axis.
     pub dx: f32,

@@ -1,5 +1,6 @@
 /// Moves the pixels of the first input by channel values of the second (`feDisplacementMap`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DisplacementMap {
     /// The displacement scale.
     // TODO: A scale per axis, since with `primitiveUnits="objectBoundingBox"` the scale is in a
@@ -13,6 +14,7 @@ pub struct DisplacementMap {
 
 /// A color or alpha channel of an image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorChannel {
     /// Red.
     R,

@@ -1,5 +1,6 @@
 /// Generates Perlin turbulence (`feTurbulence`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Turbulence {
     /// The base frequency along the x-axis.
     pub base_frequency_x: f32,
@@ -30,6 +31,7 @@ impl Default for Turbulence {
 
 /// The noise function of a [`Turbulence`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TurbulenceType {
     /// The sum of the noise octaves.
     FractalNoise,

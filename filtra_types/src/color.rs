@@ -1,5 +1,6 @@
 /// A color in gamma-encoded sRGB with unpremultiplied alpha.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Color {
     /// The red component.
     pub r: f32,
@@ -35,6 +36,7 @@ impl Color {
 
 /// The color space a filter primitive operates in (`color-interpolation-filters`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorInterpolation {
     /// Lets the implementation choose.
     Auto,

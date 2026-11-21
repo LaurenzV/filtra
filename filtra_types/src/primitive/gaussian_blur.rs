@@ -2,6 +2,7 @@ use super::EdgeMode;
 
 /// Blurs the input with a Gaussian kernel (`feGaussianBlur`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GaussianBlur {
     /// The standard deviation along the x-axis.
     pub std_dev_x: f32,

@@ -1,5 +1,6 @@
 /// How an input is extended beyond its borders (`edgeMode`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum EdgeMode {
     /// Repeat the color values at the nearest edge.
     Duplicate,

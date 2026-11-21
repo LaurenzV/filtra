@@ -13,6 +13,10 @@ repository.workspace = true
 all-features = true
 
 [dependencies]
+serde = { version = "1.0.228", default-features = false, features = ["alloc", "derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1.0.149"
 
 [features]
 default = ["all"]
@@ -51,3 +55,4 @@ offset = []
 specular-lighting = []
 tile = []
 turbulence = []
+serde = ["dep:serde"]

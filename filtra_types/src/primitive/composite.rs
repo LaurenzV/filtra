@@ -1,5 +1,6 @@
 /// Composites the first input (the source) onto the second (the destination) (`feComposite`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Composite {
     /// The compositing operator.
     pub operator: CompositeOperator,
@@ -7,6 +8,7 @@ pub struct Composite {
 
 /// The operator of a [`Composite`].
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum CompositeOperator {
     /// Porter-Duff source over.
     #[default]

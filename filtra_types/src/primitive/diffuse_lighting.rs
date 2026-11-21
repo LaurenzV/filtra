@@ -3,6 +3,7 @@ use crate::Color;
 
 /// Lights the input's alpha as a bump map with a diffuse term (`feDiffuseLighting`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DiffuseLighting {
     /// The surface height where the input alpha is 1.
     pub surface_scale: f32,

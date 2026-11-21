@@ -13,6 +13,7 @@ use crate::{Primitive, Rect};
 
 /// A CSS filter function, with percentages converted so that 100% is 1.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum FilterFunction {
     /// `blur()` with the standard deviation.
