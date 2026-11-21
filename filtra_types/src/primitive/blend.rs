@@ -1,5 +1,6 @@
 /// Blends the first input (the source) onto the second (the backdrop) (`feBlend`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Blend {
     /// The blend mode.
     pub mode: BlendMode,
@@ -9,6 +10,7 @@ pub struct Blend {
 
 /// A blend mode from Compositing and Blending Level 1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum BlendMode {
     /// `normal`.
     #[default]

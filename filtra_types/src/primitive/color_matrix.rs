@@ -1,5 +1,6 @@
 /// Transforms the unpremultiplied color of each pixel with a matrix (`feColorMatrix`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorMatrix {
     /// A 5×4 matrix in row-major order, applied to `[R, G, B, A, 1]`.
     Matrix([f32; 20]),

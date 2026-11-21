@@ -4,6 +4,7 @@ use super::EdgeMode;
 
 /// Combines each pixel with its neighbors using a convolution kernel (`feConvolveMatrix`).
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ConvolveMatrix {
     /// The number of kernel columns.
     pub order_x: u32,

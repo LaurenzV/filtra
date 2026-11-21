@@ -74,6 +74,7 @@ pub use turbulence::{Turbulence, TurbulenceType};
 
 /// A filter primitive.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum Primitive<I> {
     /// `feBlend`.

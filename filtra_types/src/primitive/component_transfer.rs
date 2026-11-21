@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 
 /// Remaps each unpremultiplied color and alpha component (`feComponentTransfer`).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ComponentTransfer {
     /// The function applied to red.
     pub red: TransferFunction,
@@ -15,6 +16,7 @@ pub struct ComponentTransfer {
 
 /// A function remapping a component in `[0, 1]` (`feFuncR`, `feFuncG`, `feFuncB`, `feFuncA`).
 #[derive(Debug, Clone, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum TransferFunction {
     /// Leaves the component unchanged.
     #[default]

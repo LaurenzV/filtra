@@ -1,5 +1,6 @@
 /// Thins or fattens the input (`feMorphology`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Morphology {
     /// Whether to erode or dilate.
     pub operator: MorphologyOperator,
@@ -11,6 +12,7 @@ pub struct Morphology {
 
 /// Whether a [`Morphology`] thins or fattens the input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum MorphologyOperator {
     /// The component-wise minimum over the kernel.
     #[default]

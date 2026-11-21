@@ -1,5 +1,6 @@
 /// The light source of a lighting primitive.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum LightSource {
     /// An infinitely distant light.
     Distant(DistantLight),
@@ -11,6 +12,7 @@ pub enum LightSource {
 
 /// An infinitely distant light (`feDistantLight`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DistantLight {
     /// The direction in the XY plane in degrees, clockwise from the x-axis.
     pub azimuth: f32,
@@ -20,6 +22,7 @@ pub struct DistantLight {
 
 /// A positional light (`fePointLight`).
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PointLight {
     /// The x position.
     pub x: f32,
@@ -31,6 +34,7 @@ pub struct PointLight {
 
 /// A positional light projecting a cone (`feSpotLight`).
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SpotLight {
     /// The x position.
     pub x: f32,

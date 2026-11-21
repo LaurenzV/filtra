@@ -11,6 +11,9 @@ use crate::{ColorInterpolation, Primitive};
 
 /// A `filter` element: its region and its primitives.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+// Deserializing goes through `push`, which keeps every reference pointing at an earlier node.
+#[cfg_attr(feature = "serde", serde(from = "Nodes<I>"))]
 pub struct Filter<I> {
     /// The filter region in user space.
     pub region: Rect,
@@ -99,6 +102,7 @@ impl<I> Filter<I> {
 
 /// A filter primitive with its inputs and common attributes.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Node<I> {
     /// The primitive.
     pub primitive: Primitive<I>,
@@ -124,6 +128,7 @@ impl<I> Node<I> {
 
 /// An input of a filter primitive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Input {
     /// The filtered element.
     SourceGraphic,
@@ -136,6 +141,7 @@ pub enum Input {
 
 /// The `x`, `y`, `width` and `height` attributes of a filter primitive in user space.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Subregion {
     /// The `x` attribute.
     pub x: Option<f32>,
@@ -160,6 +166,7 @@ impl Subregion {
 
 /// A rectangle in user space.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rect {
     /// The left edge.
     pub x: f32,
@@ -206,5 +213,58 @@ fn is_tile<I>(primitive: &Primitive<I>) -> bool {
         #[cfg(feature = "tile")]
         Primitive::Tile(_) => true,
         _ => false,
+    }
+}
+
+#[cfg(feature = "serde")]
+#[derive(serde::Deserialize)]
+struct Nodes<I> {
+    region: Rect,
+    nodes: Vec<Node<I>>,
+}
+
+#[cfg(feature = "serde")]
+impl<I> From<Nodes<I>> for Filter<I> {
+    fn from(Nodes { region, nodes }: Nodes<I>) -> Self {
+        let mut filter = Self::new(region);
+
+        for node in nodes {
+            filter.push(node);
+        }
+
+        filter
+    }
+}
+
+#[cfg(all(test, feature = "serde", feature = "merge", feature = "offset"))]
+mod tests {
+    use super::*;
+    use crate::{Merge, Offset};
+
+    #[test]
+    fn serde_round_trip() {
+        let filter = shadow();
+        let json = serde_json::to_string(&filter).unwrap();
+
+        assert_eq!(serde_json::from_str::<Filter<()>>(&json).unwrap(), filter);
+    }
+
+    #[test]
+    fn deserializing_redirects_references_to_later_nodes() {
+        let mut json = serde_json::to_value(shadow()).unwrap();
+        json["nodes"][0]["inputs"][0] = serde_json::to_value(Input::Result(2)).unwrap();
+        let filter: Filter<()> = serde_json::from_value(json).unwrap();
+
+        assert_eq!(filter.nodes()[0].inputs, [Input::SourceGraphic]);
+    }
+
+    fn shadow() -> Filter<()> {
+        let mut filter = Filter::new(Rect::new(0.0, 0.0, 100.0, 100.0));
+        let offset = Offset { dx: 5.0, dy: 5.0 };
+        let shadow = filter.push(Node::new(Primitive::Offset(offset), [Input::SourceAlpha]));
+        let merge = Node::new(Primitive::Merge(Merge), [shadow, Input::SourceGraphic]);
+        filter.push(merge);
+
+        filter
     }
 }
