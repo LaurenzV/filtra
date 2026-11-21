@@ -13,6 +13,8 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(feature = "gaussian-blur")]
+mod blur;
 mod buffers;
 mod planner;
 mod rect;
@@ -253,14 +255,34 @@ pub enum Step {
         origin: [f32; 2],
     },
     #[cfg(feature = "gaussian-blur")]
-    /// Blurs an image with a Gaussian.
+    /// Halves an image along the axes with [1, 3, 3, 1] / 8.
+    Downsample {
+        /// The source.
+        src: ImageId,
+        /// The destination, in the halved grid.
+        dst: ImageId,
+        /// Whether to halve along x and along y.
+        axes: [bool; 2],
+    },
+    #[cfg(feature = "gaussian-blur")]
+    /// Doubles an image along the axes with [1, 3] / 4 interpolation.
+    Upsample {
+        /// The source.
+        src: ImageId,
+        /// The destination, in the doubled grid.
+        dst: ImageId,
+        /// Whether to double along x and along y.
+        axes: [bool; 2],
+    },
+    #[cfg(feature = "gaussian-blur")]
+    /// Convolves an image with a symmetric kernel along x and y.
     GaussianBlur {
         /// The source.
         src: ImageId,
         /// The destination.
         dst: ImageId,
-        /// The standard deviations along x and y in pixels.
-        std_dev: [f32; 2],
+        /// The weights along x and y from the centre outwards, in units of 2^-15.
+        weights: [Vec<u16>; 2],
     },
 }
 
@@ -294,7 +316,9 @@ impl Pass for Step {
             #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
             Self::Lighting { src, .. } => ([Some(*src), None], &[]),
             #[cfg(feature = "gaussian-blur")]
-            Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
+            Self::Downsample { src, .. }
+            | Self::Upsample { src, .. }
+            | Self::GaussianBlur { src, .. } => ([Some(*src), None], &[]),
         };
 
         fixed.into_iter().flatten().chain(rest.iter().copied())
@@ -330,7 +354,9 @@ impl Pass for Step {
             #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
             Self::Lighting { dst, .. } => *dst,
             #[cfg(feature = "gaussian-blur")]
-            Self::GaussianBlur { dst, .. } => *dst,
+            Self::Downsample { dst, .. }
+            | Self::Upsample { dst, .. }
+            | Self::GaussianBlur { dst, .. } => *dst,
         }
     }
 }

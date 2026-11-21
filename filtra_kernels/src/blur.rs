@@ -7,133 +7,43 @@ use crate::mul_q15::MulQ15;
 use crate::simd::Wide;
 use crate::{IntRect, Source, Target};
 
-/// `feGaussianBlur` and `blur()`, with the standard deviations in pixels.
-pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
-    let axes = std_dev.map(Axis::new);
+/// Halves `src` along the axes with [1, 3, 3, 1] / 8.
+pub fn downsample(src: Source<'_>, dst: Target<'_>, axes: [bool; 2]) {
+    let ops = axes.map(|axis| if axis { Op::Halve } else { Op::Copy });
 
-    if axes.iter().all(|axis| axis.weights.is_empty()) {
-        return crate::offset(src, dst, [0, 0]);
-    }
+    dispatch!(simd => fill_target(simd, src, ops, dst));
+}
 
-    dispatch!(simd => blur(simd, src, dst, &axes));
+/// Doubles `src` along the axes with [1, 3] / 4 interpolation.
+pub fn upsample(src: Source<'_>, dst: Target<'_>, axes: [bool; 2]) {
+    let ops = axes.map(|axis| if axis { Op::Double } else { Op::Copy });
+
+    dispatch!(simd => fill_target(simd, src, ops, dst));
+}
+
+/// Convolves `src` with symmetric weights from the centre outwards, in units of 2^-15.
+pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, weights: [&[u16]; 2]) {
+    assert!(
+        weights
+            .iter()
+            .all(|weights| weights.len() <= MAX_TAPS / 2 + 1)
+    );
+
+    let ops = weights.map(|weights| {
+        if weights.is_empty() {
+            Op::Copy
+        } else {
+            Op::Gauss(weights)
+        }
+    });
+
+    dispatch!(simd => fill_target(simd, src, ops, dst));
 }
 
 const CHUNK: usize = 8;
-/// Transparent pixels on each side of every row of an intermediate image.
-const PAD: usize = 32;
-/// Beyond this, a blur spreads any image too thin to leave a visible pixel.
-const MAX_STD_DEV: f32 = 1e11;
 const MAX_TAPS: usize = 13;
 /// The fractional bits of a horizontal Gaussian, which leave room for the sum of two of them.
 const GAUSS_FRACTION: u32 = 6;
-
-fn blur<S: MulQ15>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) {
-    // The blur is decimated: each axis is halved with [1, 3, 3, 1] / 8 until a variance of at most
-    // 4 is left, that rest is a small Gaussian on the coarsest image, and the image is then doubled
-    // back with [1, 3] / 4 interpolation. Halving and doubling each add a variance of 0.75 in the
-    // finer grid, and a variance in the coarser grid is four times as large in the finer one, so
-    // the passes add up to the requested variance. Each level has half the pixels of the one
-    // before along every halved axis, which keeps the work per pixel constant for any blur.
-    let levels = axes[0].halvings.max(axes[1].halvings);
-    let (source, target) = (spans(src.rect()), spans(dst.rect()));
-    let layout: [Layout; 2] =
-        core::array::from_fn(|a| Layout::new(&axes[a], levels, source[a], target[a]));
-
-    if layout.iter().any(|axis| axis.up[0].is_empty()) {
-        return crate::flood(dst, [0; 4]);
-    }
-
-    let resampling = |level: usize, op: Op<'static>| {
-        [0, 1].map(|a| {
-            if level < axes[a].halvings {
-                op
-            } else {
-                Op::Copy
-            }
-        })
-    };
-    let down = |level: usize| [layout[0].down[level], layout[1].down[level]];
-    let up = |level: usize| [layout[0].up[level], layout[1].up[level]];
-
-    let passes = (0..levels)
-        .map(|level| (resampling(level, Op::Halve), down(level + 1)))
-        .chain([(axes.each_ref().map(Axis::op), up(levels))])
-        .chain(
-            (0..levels)
-                .rev()
-                .map(|level| (resampling(level, Op::Double), up(level))),
-        );
-    let mut passes: Vec<([Op<'_>; 2], [Span; 2])> = passes.collect();
-    let (last_ops, last_spans) = passes.pop().unwrap();
-    let mut current: Option<Plane> = None;
-    // Only the image a pass reads and the one it writes are alive at a time, so the memory of the
-    // image before goes to the next one.
-    let mut spare = Vec::new();
-
-    for (ops, spans) in passes {
-        let mut plane = Plane::new(spans, core::mem::take(&mut spare));
-        let input = current.as_ref().map_or(Input::Source(src), Input::Plane);
-        fill_plane(simd, input, ops, &mut plane);
-
-        if let Some(previous) = current.replace(plane) {
-            spare = previous.data;
-        }
-    }
-
-    let input = current.as_ref().map_or(Input::Source(src), Input::Plane);
-    fill_target(simd, input, last_ops, last_spans, dst);
-}
-
-struct Axis {
-    halvings: usize,
-    /// The weight of the centre followed by those of the distances 1, 2, …, summing to 2^15 over
-    /// both sides; empty for an axis that isn't blurred.
-    weights: Vec<u16>,
-}
-
-impl Axis {
-    fn new(std_dev: f32) -> Self {
-        if std_dev.is_nan() || std_dev <= 0.0 {
-            return Self {
-                halvings: 0,
-                weights: Vec::new(),
-            };
-        }
-
-        let std_dev = f64::from(std_dev.min(MAX_STD_DEV));
-        let mut variance = std_dev * std_dev;
-        let mut halvings = 0;
-
-        while variance > 4.0 {
-            variance = (variance - 1.5) / 4.0;
-            halvings += 1;
-        }
-
-        let radius = (3.0 * variance.sqrt()).ceil() as usize;
-        let exact: Vec<f64> = (0..=radius)
-            .map(|i| (-((i * i) as f64) / (2.0 * variance)).exp())
-            .collect();
-        let total = exact[0] + 2.0 * exact[1..].iter().sum::<f64>();
-        let mut weights: Vec<u16> = exact
-            .iter()
-            .map(|w| (w / total * 32768.0).round() as u16)
-            .collect();
-        let sum =
-            u32::from(weights[0]) + 2 * weights[1..].iter().map(|&w| u32::from(w)).sum::<u32>();
-        // The rounding error goes to the centre. A lone centre weight of 2^15 doesn't fit the
-        // 15-bit range, and 2^15 - 1 leaves every 8-bit value unchanged.
-        weights[0] = (u32::from(weights[0]) + 32768 - sum).min(32767) as u16;
-
-        Self { halvings, weights }
-    }
-
-    fn op(&self) -> Op<'_> {
-        match self.weights.as_slice() {
-            [] => Op::Copy,
-            weights => Op::Gauss(weights),
-        }
-    }
-}
 
 /// Columns or rows from `.0` inclusive to `.1` exclusive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,32 +68,14 @@ impl Span {
         self.0 >= self.1
     }
 
-    fn contains(self, i: i64) -> bool {
-        (self.0..self.1).contains(&i)
-    }
-
-    fn intersect(self, other: Span) -> Span {
-        Span::new(self.0.max(other.0), self.1.min(other.1))
-    }
-
     fn grow(self, by: i64) -> Span {
         self.map(|a, b| (a - by, b + by))
-    }
-
-    /// The pixels that halving this span makes non-zero.
-    fn halved(self) -> Span {
-        self.map(|a, b| ((a - 1).div_euclid(2), b.div_euclid(2) + 1))
     }
 
     /// The pixels that doubling this span makes non-zero, which are also the pixels that halving
     /// reads for it.
     fn doubled(self) -> Span {
         self.map(|a, b| (2 * a - 1, 2 * b + 1))
-    }
-
-    /// The coarser pixels that doubling into this span reads.
-    fn doubling_reads(self) -> Span {
-        self.map(|a, b| (a.div_euclid(2) - 1, (b - 1).div_euclid(2) + 2))
     }
 
     fn map(self, f: impl FnOnce(i64, i64) -> (i64, i64)) -> Span {
@@ -200,100 +92,6 @@ fn spans(rect: IntRect) -> [Span; 2] {
     let span = |a: i32, b: i32| Span::new(a.into(), b.into());
 
     [span(rect.x0, rect.x1), span(rect.y0, rect.y1)]
-}
-
-/// The pixels each pass computes along one axis.
-struct Layout {
-    /// The halved levels, indexed by level from 1.
-    down: Vec<Span>,
-    /// The Gaussian on the coarsest level and the levels doubled from it, indexed by level.
-    up: Vec<Span>,
-}
-
-impl Layout {
-    fn new(axis: &Axis, levels: usize, source: Span, target: Span) -> Self {
-        let resampled = |level: usize, span: Span, resample: fn(Span) -> Span| {
-            if level < axis.halvings {
-                resample(span)
-            } else {
-                span
-            }
-        };
-        let mut data = vec![source];
-        let mut needed = vec![target];
-
-        for level in 0..levels {
-            data.push(resampled(level, data[level], Span::halved));
-            needed.push(resampled(level, needed[level], Span::doubling_reads));
-        }
-
-        let radius = axis.weights.len().saturating_sub(1) as i64;
-        let gauss = needed[levels].intersect(data[levels].grow(radius));
-        let mut down = vec![Span::EMPTY; levels + 1];
-
-        if levels > 0 {
-            down[levels] = gauss.grow(radius).intersect(data[levels]);
-        }
-
-        for level in (1..levels).rev() {
-            let read = resampled(level, down[level + 1], Span::doubled);
-            down[level] = read.intersect(data[level]);
-        }
-
-        let mut up = vec![gauss; levels + 1];
-
-        for level in (0..levels).rev() {
-            let spread = resampled(level, up[level + 1], Span::doubled);
-            up[level] = needed[level].intersect(spread);
-        }
-
-        Self { down, up }
-    }
-}
-
-/// An intermediate image on `x` × `y` with transparent padding.
-struct Plane {
-    x: Span,
-    y: Span,
-    stride: usize,
-    data: Vec<u8>,
-}
-
-impl Plane {
-    fn new([x, y]: [Span; 2], mut data: Vec<u8>) -> Self {
-        let stride = (x.len() + 2 * PAD) * 4;
-        data.resize(stride * y.len(), 0);
-
-        // Only the padding is cleared, as a pass writes every pixel in between.
-        for row in data.chunks_exact_mut(stride) {
-            row[..PAD * 4].fill(0);
-            row[stride - PAD * 4..].fill(0);
-        }
-
-        Self { x, y, stride, data }
-    }
-
-    /// The padded row `y`, and the column of its first pixel.
-    fn row(&self, y: i64) -> Option<(&[u8], i64)> {
-        self.y.contains(y).then(|| {
-            let start = (y - self.y.0) as usize * self.stride;
-            (
-                &self.data[start..start + self.stride],
-                self.x.0 - PAD as i64,
-            )
-        })
-    }
-
-    fn row_mut(&mut self, y: i64) -> &mut [u8] {
-        let start = (y - self.y.0) as usize * self.stride + PAD * 4;
-        &mut self.data[start..start + self.x.len() * 4]
-    }
-}
-
-#[derive(Clone, Copy)]
-enum Input<'a> {
-    Source(Source<'a>),
-    Plane(&'a Plane),
 }
 
 /// A horizontal or vertical step of a pass.
@@ -340,44 +138,19 @@ impl Op<'_> {
     }
 }
 
-fn fill_plane<S: MulQ15>(simd: S, input: Input<'_>, ops: [Op<'_>; 2], plane: &mut Plane) {
-    let mut pass = Pass::new(simd, input, ops, plane.x);
+fn fill_target<S: MulQ15>(simd: S, src: Source<'_>, ops: [Op<'_>; 2], mut dst: Target<'_>) {
+    let [x, _] = spans(dst.rect());
+    let mut pass = Pass::new(simd, src, ops, x);
 
-    for y in plane.y.0..plane.y.1 {
-        pass.row(y, plane.row_mut(y));
-    }
-}
-
-fn fill_target<S: MulQ15>(
-    simd: S,
-    input: Input<'_>,
-    ops: [Op<'_>; 2],
-    [x, y]: [Span; 2],
-    mut dst: Target<'_>,
-) {
-    let rect = dst.rect();
-    let mut pass = Pass::new(simd, input, ops, x);
-    let offset = |x: i64| (x - i64::from(rect.x0)) as usize * 4;
-    let (start, end) = (offset(x.0), offset(x.1));
-
-    for (row_y, row) in dst.rows_mut() {
-        let row_y = i64::from(row_y);
-
-        if !y.contains(row_y) {
-            row.fill(0);
-            continue;
-        }
-
-        row[..start].fill(0);
-        pass.row(row_y, &mut row[start..end]);
-        row[end..].fill(0);
+    for (y, row) in dst.rows_mut() {
+        pass.row(i64::from(y), row);
     }
 }
 
 /// One pass: a horizontal step into 16-bit rows, then a vertical step that combines them.
 struct Pass<'a, S: MulQ15> {
     simd: S,
-    input: Input<'a>,
+    src: Source<'a>,
     ops: [Op<'a>; 2],
     x: Span,
     /// The column of the first horizontal result.
@@ -399,7 +172,7 @@ struct Part {
 }
 
 impl<'a, S: MulQ15> Pass<'a, S> {
-    fn new(simd: S, input: Input<'a>, ops: [Op<'a>; 2], x: Span) -> Self {
+    fn new(simd: S, src: Source<'a>, ops: [Op<'a>; 2], x: Span) -> Self {
         // Doubling makes two outputs, an even and an odd one, per input pixel.
         let (first, group) = match ops[0] {
             Op::Double => (x.0.div_euclid(2) * 2, 2),
@@ -409,44 +182,36 @@ impl<'a, S: MulQ15> Pass<'a, S> {
         let chunks = groups * group;
         let ring = ops[1].rows(0).1;
 
-        let parts = match input {
-            Input::Plane(_) => vec![Part {
-                chunks: 0..chunks,
-                copy: None,
-            }],
-            Input::Source(src) => {
-                // Only the chunks near the edges of the source read past them, so only their
-                // columns are copied.
-                let [source, _] = spans(src.rect());
-                let reads = |groups: Range<usize>| {
-                    let start = first + (groups.start * group * CHUNK) as i64;
-                    ops[0].reads(start, start + (groups.len() * group * CHUNK) as i64)
-                };
-                let inside = |g: usize| {
-                    let reads = reads(g..g + 1);
-                    reads.0 >= source.0 && reads.1 <= source.1
-                };
-                let start = (0..groups).find(|&g| inside(g)).unwrap_or(groups);
-                let end = (start..groups).find(|&g| !inside(g)).unwrap_or(groups);
-                let part = |groups: Range<usize>, copied: bool| Part {
-                    copy: copied.then(|| vec![0; reads(groups.clone()).len() * 4]),
-                    chunks: groups.start * group..groups.end * group,
-                };
-
-                [
-                    part(0..start, true),
-                    part(start..end, false),
-                    part(end..groups, true),
-                ]
-                .into_iter()
-                .filter(|part| !part.chunks.is_empty())
-                .collect()
-            }
+        // Only the chunks near the edges of the source read past them, so only their
+        // columns are copied.
+        let [source, _] = spans(src.rect());
+        let reads = |groups: Range<usize>| {
+            let start = first + (groups.start * group * CHUNK) as i64;
+            ops[0].reads(start, start + (groups.len() * group * CHUNK) as i64)
         };
+        let inside = |g: usize| {
+            let reads = reads(g..g + 1);
+            reads.0 >= source.0 && reads.1 <= source.1
+        };
+        let start = (0..groups).find(|&g| inside(g)).unwrap_or(groups);
+        let end = (start..groups).find(|&g| !inside(g)).unwrap_or(groups);
+        let part = |groups: Range<usize>, copied: bool| Part {
+            copy: copied.then(|| vec![0; reads(groups.clone()).len() * 4]),
+            chunks: groups.start * group..groups.end * group,
+        };
+
+        let parts = [
+            part(0..start, true),
+            part(start..end, false),
+            part(end..groups, true),
+        ]
+        .into_iter()
+        .filter(|part| !part.chunks.is_empty())
+        .collect();
 
         Self {
             simd,
-            input,
+            src,
             ops,
             x,
             first,
@@ -527,27 +292,21 @@ impl<'a, S: MulQ15> Pass<'a, S> {
         for part in &mut self.parts {
             let first = self.first + (part.chunks.start * CHUNK) as i64;
             let reads = self.ops[0].reads(first, first + (part.chunks.len() * CHUNK) as i64);
-            let row = match self.input {
-                Input::Plane(plane) => plane.row(y),
-                Input::Source(src) => {
-                    let rect = src.rect();
-                    let x0 = reads.0.max(rect.x0.into());
-                    let x1 = reads.1.min(rect.x1.into());
-                    let row = i32::try_from(y)
-                        .ok()
-                        .filter(|_| x0 < x1)
-                        .and_then(|y| src.row(y, x0 as i32, x1 as i32));
-
-                    row.map(|row| match &mut part.copy {
-                        Some(copy) => {
-                            let start = (x0 - reads.0) as usize * 4;
-                            copy[start..start + row.len()].copy_from_slice(row);
-                            (copy.as_slice(), reads.0)
-                        }
-                        None => (row, reads.0),
-                    })
+            let rect = self.src.rect();
+            let x0 = reads.0.max(rect.x0.into());
+            let x1 = reads.1.min(rect.x1.into());
+            let row = i32::try_from(y)
+                .ok()
+                .filter(|_| x0 < x1)
+                .and_then(|y| self.src.row(y, x0 as i32, x1 as i32));
+            let row = row.map(|row| match &mut part.copy {
+                Some(copy) => {
+                    let start = (x0 - reads.0) as usize * 4;
+                    copy[start..start + row.len()].copy_from_slice(row);
+                    (copy.as_slice(), reads.0)
                 }
-            };
+                None => (row, reads.0),
+            });
 
             horizontal(
                 self.simd,

@@ -328,8 +328,17 @@ fn execute_step(
             filtra_kernels::lighting(inputs.read(*src), output, &lighting);
         }),
         #[cfg(feature = "gaussian-blur")]
-        Step::GaussianBlur { src, dst, std_dev } => store.write(*dst, |inputs, target| {
-            filtra_kernels::gaussian_blur(inputs.read(*src), target, *std_dev);
+        Step::Downsample { src, dst, axes } => store.write(*dst, |inputs, target| {
+            filtra_kernels::downsample(inputs.read(*src), target, *axes);
+        }),
+        #[cfg(feature = "gaussian-blur")]
+        Step::Upsample { src, dst, axes } => store.write(*dst, |inputs, target| {
+            filtra_kernels::upsample(inputs.read(*src), target, *axes);
+        }),
+        #[cfg(feature = "gaussian-blur")]
+        Step::GaussianBlur { src, dst, weights } => store.write(*dst, |inputs, target| {
+            let [x, y] = weights;
+            filtra_kernels::gaussian_blur(inputs.read(*src), target, [x, y]);
         }),
         // A dependency can enable a primitive on `filtra_plan` without enabling it here.
         step => panic!("`filtra` is built without the feature for {step:?}"),

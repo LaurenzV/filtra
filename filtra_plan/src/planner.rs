@@ -275,11 +275,9 @@ impl<'a, I> Planner<'a, I> {
                 ],
             },
             #[cfg(feature = "gaussian-blur")]
-            (Primitive::GaussianBlur(blur), &[src]) => Step::GaussianBlur {
-                src,
-                dst,
-                std_dev: std_dev([blur.std_dev_x, blur.std_dev_y], self.transform),
-            },
+            (Primitive::GaussianBlur(blur), &[src]) => {
+                self.gaussian_blur(src, dst, [blur.std_dev_x, blur.std_dev_y])
+            }
             #[cfg(feature = "diffuse-lighting")]
             // TODO: `kernelUnitLength`, which is deprecated (§9.10, §9.19).
             (Primitive::DiffuseLighting(diffuse), &[src]) => Step::Lighting {
@@ -346,12 +344,9 @@ impl<'a, I> Planner<'a, I> {
                     0.0, 0.0, 0.0, color.a, 0.0,
                 ];
 
+                let blur = self.gaussian_blur(src, blurred, [shadow.std_dev_x, shadow.std_dev_y]);
                 self.steps.extend([
-                    Step::GaussianBlur {
-                        src,
-                        dst: blurred,
-                        std_dev: std_dev([shadow.std_dev_x, shadow.std_dev_y], self.transform),
-                    },
+                    blur,
                     Step::ColorMatrix {
                         src: blurred,
                         dst: colored,
@@ -441,6 +436,17 @@ impl<'a, I> Planner<'a, I> {
             (dx * self.transform.sx).round() as i64,
             (dy * self.transform.sy).round() as i64,
         ]
+    }
+
+    #[cfg(feature = "gaussian-blur")]
+    fn gaussian_blur(&mut self, src: ImageId, dst: ImageId, user_std_dev: [f32; 2]) -> Step {
+        let std_dev = std_dev(user_std_dev, self.transform);
+        let (src, dst) = ((src, self.rects[src.0]), (dst, self.rects[dst.0]));
+        let mut steps = crate::blur::steps(src, dst, std_dev, |rect| self.image(rect));
+        let last = steps.pop().unwrap();
+        self.steps.extend(steps);
+
+        last
     }
 
     fn image(&mut self, rect: IntRect) -> ImageId {

@@ -53,7 +53,7 @@ pub use alpha::alpha;
 #[cfg(feature = "blend")]
 pub use blend::blend;
 #[cfg(feature = "gaussian-blur")]
-pub use blur::gaussian_blur;
+pub use blur::{downsample, gaussian_blur, upsample};
 #[cfg(feature = "color-matrix")]
 pub use color_matrix::color_matrix;
 pub use color_space::{ColorSpace, convert};
