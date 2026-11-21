@@ -2,102 +2,104 @@
 
 use crate::IntRect;
 
-/// The halvings and the remaining Gaussian of one axis of a blur.
+/// A Gaussian blur as the passes that apply it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Axis {
-    /// The number of times the axis is halved.
-    pub halvings: usize,
-    /// The weights of the remaining Gaussian from the centre outwards, in units of 2^-15.
-    pub weights: Vec<u16>,
+pub enum Blur {
+    /// The input unchanged.
+    Unchanged,
+    /// A transparent result.
+    Transparent,
+    /// The input decimated.
+    Decimated {
+        /// The passes in execution order.
+        passes: Vec<Pass>,
+        /// The weights of the Gaussian along x and y from the centre outwards, in units of 2^-15.
+        weights: [Vec<u16>; 2],
+    },
 }
 
-impl Axis {
-    /// The decimation of an axis with the standard deviation `std_dev` in pixels.
-    pub fn new(std_dev: f32) -> Self {
-        if std_dev.is_nan() || std_dev <= 0.0 {
-            return Self {
-                halvings: 0,
-                weights: Vec::new(),
-            };
+impl Blur {
+    /// The blur of `source` into `target` with the standard deviations `std_dev` in pixels.
+    pub fn new(std_dev: [f32; 2], source: IntRect, target: IntRect) -> Self {
+        let axes = std_dev.map(Axis::new);
+
+        if axes.iter().all(|axis| axis.weights.is_empty()) {
+            return Self::Unchanged;
         }
 
-        let std_dev = f64::from(std_dev.min(MAX_STD_DEV));
-        let mut variance = std_dev * std_dev;
-        let mut halvings = 0;
+        // The blur is decimated: each axis is halved with [1, 3, 3, 1] / 8 until a variance of at
+        // most 4 is left, that rest is a small Gaussian on the coarsest image, and the image is
+        // then doubled back with [1, 3] / 4 interpolation. Halving and doubling each add a
+        // variance of 0.75 in the finer grid, and a variance in the coarser grid is four times as
+        // large in the finer one, so the passes add up to the requested variance. Each level has
+        // half the pixels of the one before along every halved axis, which keeps the work per
+        // pixel constant for any blur.
+        let levels = axes[0].halvings.max(axes[1].halvings);
+        let (source, target) = (spans(source), spans(target));
+        let layout: [Layout; 2] =
+            core::array::from_fn(|a| Layout::new(&axes[a], levels, source[a], target[a]));
 
-        while variance > 4.0 {
-            variance = (variance - 1.5) / 4.0;
-            halvings += 1;
+        if layout.iter().any(|axis| axis.up[0].is_empty()) {
+            return Self::Transparent;
         }
 
-        let radius = (3.0 * variance.sqrt()).ceil() as usize;
-        let exact: Vec<f64> = (0..=radius)
-            .map(|i| (-((i * i) as f64) / (2.0 * variance)).exp())
-            .collect();
-        let total = exact[0] + 2.0 * exact[1..].iter().sum::<f64>();
-        let mut weights: Vec<u16> = exact
-            .iter()
-            .map(|w| (w / total * 32768.0).round() as u16)
-            .collect();
-        let sum =
-            u32::from(weights[0]) + 2 * weights[1..].iter().map(|&w| u32::from(w)).sum::<u32>();
-        // The rounding error goes to the centre. A lone centre weight of 2^15 doesn't fit the
-        // 15-bit range, and 2^15 - 1 leaves every 8-bit value unchanged.
-        weights[0] = (u32::from(weights[0]) + 32768 - sum).min(32767) as u16;
-
-        Self { halvings, weights }
-    }
-}
-
-/// The pixels each pass of a blur computes along one axis.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Layout {
-    /// The halved levels, indexed by level from 1.
-    pub down: Vec<Span>,
-    /// The Gaussian on the coarsest level and the levels doubled from it, indexed by level.
-    pub up: Vec<Span>,
-}
-
-impl Layout {
-    /// The spans of an axis with `levels` halvings that blurs `source` into `target`.
-    pub fn new(axis: &Axis, levels: usize, source: Span, target: Span) -> Self {
-        let resampled = |level: usize, span: Span, resample: fn(Span) -> Span| {
-            if level < axis.halvings {
-                resample(span)
+        let resampling = |level: usize, op: Op| {
+            [0, 1].map(|a| {
+                if level < axes[a].halvings {
+                    op
+                } else {
+                    Op::Copy
+                }
+            })
+        };
+        let gauss = |axis: &Axis| {
+            if axis.weights.is_empty() {
+                Op::Copy
             } else {
-                span
+                Op::Gauss
             }
         };
-        let mut data = vec![source];
-        let mut needed = vec![target];
+        let down = |level: usize| [layout[0].down[level], layout[1].down[level]];
+        let up = |level: usize| [layout[0].up[level], layout[1].up[level]];
 
-        for level in 0..levels {
-            data.push(resampled(level, data[level], Span::halved));
-            needed.push(resampled(level, needed[level], Span::doubling_reads));
+        let passes = (0..levels)
+            .map(|level| (resampling(level, Op::Halve), down(level + 1)))
+            .chain([(axes.each_ref().map(gauss), up(levels))])
+            .chain(
+                (0..levels)
+                    .rev()
+                    .map(|level| (resampling(level, Op::Double), up(level))),
+            )
+            .map(|(ops, spans)| Pass { ops, spans })
+            .collect();
+
+        Self::Decimated {
+            passes,
+            weights: axes.map(|axis| axis.weights),
         }
-
-        let radius = axis.weights.len().saturating_sub(1) as i64;
-        let gauss = needed[levels].intersect(data[levels].grow(radius));
-        let mut down = vec![Span::EMPTY; levels + 1];
-
-        if levels > 0 {
-            down[levels] = gauss.grow(radius).intersect(data[levels]);
-        }
-
-        for level in (1..levels).rev() {
-            let read = resampled(level, down[level + 1], Span::doubled);
-            down[level] = read.intersect(data[level]);
-        }
-
-        let mut up = vec![gauss; levels + 1];
-
-        for level in (0..levels).rev() {
-            let spread = resampled(level, up[level + 1], Span::doubled);
-            up[level] = needed[level].intersect(spread);
-        }
-
-        Self { down, up }
     }
+}
+
+/// One pass of a blur.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pass {
+    /// The operations along x and y.
+    pub ops: [Op; 2],
+    /// The pixels the pass computes along x and y.
+    pub spans: [Span; 2],
+}
+
+/// The operation of a pass along one axis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Op {
+    /// The pixels unchanged.
+    Copy,
+    /// [1, 3, 3, 1] / 8 to every other pixel.
+    Halve,
+    /// [1, 3] / 4 and [3, 1] / 4 between the pixels.
+    Double,
+    /// The Gaussian with the weights of the axis.
+    Gauss,
 }
 
 /// Columns or rows from `.0` inclusive to `.1` exclusive.
@@ -173,5 +175,98 @@ pub fn spans(rect: IntRect) -> [Span; 2] {
     [span(rect.x0, rect.x1), span(rect.y0, rect.y1)]
 }
 
-// Beyond this, a blur spreads any image too thin to leave a visible pixel.
+struct Axis {
+    halvings: usize,
+    /// The weight of the centre followed by those of the distances 1, 2, …, summing to 2^15 over
+    /// both sides; empty for an axis that isn't blurred.
+    weights: Vec<u16>,
+}
+
+impl Axis {
+    fn new(std_dev: f32) -> Self {
+        if std_dev.is_nan() || std_dev <= 0.0 {
+            return Self {
+                halvings: 0,
+                weights: Vec::new(),
+            };
+        }
+
+        let std_dev = f64::from(std_dev.min(MAX_STD_DEV));
+        let mut variance = std_dev * std_dev;
+        let mut halvings = 0;
+
+        while variance > 4.0 {
+            variance = (variance - 1.5) / 4.0;
+            halvings += 1;
+        }
+
+        let radius = (3.0 * variance.sqrt()).ceil() as usize;
+        let exact: Vec<f64> = (0..=radius)
+            .map(|i| (-((i * i) as f64) / (2.0 * variance)).exp())
+            .collect();
+        let total = exact[0] + 2.0 * exact[1..].iter().sum::<f64>();
+        let mut weights: Vec<u16> = exact
+            .iter()
+            .map(|w| (w / total * 32768.0).round() as u16)
+            .collect();
+        let sum =
+            u32::from(weights[0]) + 2 * weights[1..].iter().map(|&w| u32::from(w)).sum::<u32>();
+        // The rounding error goes to the centre. A lone centre weight of 2^15 doesn't fit the
+        // 15-bit range, and 2^15 - 1 leaves every 8-bit value unchanged.
+        weights[0] = (u32::from(weights[0]) + 32768 - sum).min(32767) as u16;
+
+        Self { halvings, weights }
+    }
+}
+
+/// The pixels each pass computes along one axis.
+struct Layout {
+    /// The halved levels, indexed by level from 1.
+    down: Vec<Span>,
+    /// The Gaussian on the coarsest level and the levels doubled from it, indexed by level.
+    up: Vec<Span>,
+}
+
+impl Layout {
+    fn new(axis: &Axis, levels: usize, source: Span, target: Span) -> Self {
+        let resampled = |level: usize, span: Span, resample: fn(Span) -> Span| {
+            if level < axis.halvings {
+                resample(span)
+            } else {
+                span
+            }
+        };
+        let mut data = vec![source];
+        let mut needed = vec![target];
+
+        for level in 0..levels {
+            data.push(resampled(level, data[level], Span::halved));
+            needed.push(resampled(level, needed[level], Span::doubling_reads));
+        }
+
+        let radius = axis.weights.len().saturating_sub(1) as i64;
+        let gauss = needed[levels].intersect(data[levels].grow(radius));
+        let mut down = vec![Span::EMPTY; levels + 1];
+
+        if levels > 0 {
+            down[levels] = gauss.grow(radius).intersect(data[levels]);
+        }
+
+        for level in (1..levels).rev() {
+            let read = resampled(level, down[level + 1], Span::doubled);
+            down[level] = read.intersect(data[level]);
+        }
+
+        let mut up = vec![gauss; levels + 1];
+
+        for level in (0..levels).rev() {
+            let spread = resampled(level, up[level + 1], Span::doubled);
+            up[level] = needed[level].intersect(spread);
+        }
+
+        Self { down, up }
+    }
+}
+
+/// Beyond this, a blur spreads any image too thin to leave a visible pixel.
 const MAX_STD_DEV: f32 = 1e11;

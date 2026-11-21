@@ -1,7 +1,7 @@
 use core::ops::Range;
 
 use fearless_simd::{Simd, prelude::*, u8x32, u16x16, u32x8};
-use filtra_core::blur::{Axis, Layout, Span, spans};
+use filtra_core::blur::{self, Blur, Span, spans};
 
 use crate::dispatch::dispatch;
 use crate::mul_q15::MulQ15;
@@ -10,13 +10,13 @@ use crate::{Source, Target};
 
 /// `feGaussianBlur` and `blur()`, with the standard deviations in pixels.
 pub fn gaussian_blur(src: Source<'_>, dst: Target<'_>, std_dev: [f32; 2]) {
-    let axes = std_dev.map(Axis::new);
-
-    if axes.iter().all(|axis| axis.weights.is_empty()) {
-        return crate::offset(src, dst, [0, 0]);
+    match Blur::new(std_dev, src.rect(), dst.rect()) {
+        Blur::Unchanged => crate::offset(src, dst, [0, 0]),
+        Blur::Transparent => crate::flood(dst, [0; 4]),
+        Blur::Decimated { passes, weights } => {
+            dispatch!(simd => decimated(simd, src, dst, &passes, &weights));
+        }
     }
-
-    dispatch!(simd => blur(simd, src, dst, &axes));
 }
 
 const CHUNK: usize = 8;
@@ -26,53 +26,31 @@ const MAX_TAPS: usize = 13;
 /// The fractional bits of a horizontal Gaussian, which leave room for the sum of two of them.
 const GAUSS_FRACTION: u32 = 6;
 
-fn blur<S: MulQ15>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) {
-    // The blur is decimated: each axis is halved with [1, 3, 3, 1] / 8 until a variance of at most
-    // 4 is left, that rest is a small Gaussian on the coarsest image, and the image is then doubled
-    // back with [1, 3] / 4 interpolation. Halving and doubling each add a variance of 0.75 in the
-    // finer grid, and a variance in the coarser grid is four times as large in the finer one, so
-    // the passes add up to the requested variance. Each level has half the pixels of the one
-    // before along every halved axis, which keeps the work per pixel constant for any blur.
-    let levels = axes[0].halvings.max(axes[1].halvings);
-    let (source, target) = (spans(src.rect()), spans(dst.rect()));
-    let layout: [Layout; 2] =
-        core::array::from_fn(|a| Layout::new(&axes[a], levels, source[a], target[a]));
-
-    if layout.iter().any(|axis| axis.up[0].is_empty()) {
-        return crate::flood(dst, [0; 4]);
-    }
-
-    let resampling = |level: usize, op: Op<'static>| {
-        [0, 1].map(|a| {
-            if level < axes[a].halvings {
-                op
-            } else {
-                Op::Copy
-            }
+fn decimated<S: MulQ15>(
+    simd: S,
+    src: Source<'_>,
+    dst: Target<'_>,
+    passes: &[blur::Pass],
+    weights: &[Vec<u16>; 2],
+) {
+    let ops = |pass: &blur::Pass| {
+        [0, 1].map(|a| match pass.ops[a] {
+            blur::Op::Copy => Op::Copy,
+            blur::Op::Halve => Op::Halve,
+            blur::Op::Double => Op::Double,
+            blur::Op::Gauss => Op::Gauss(&weights[a]),
         })
     };
-    let down = |level: usize| [layout[0].down[level], layout[1].down[level]];
-    let up = |level: usize| [layout[0].up[level], layout[1].up[level]];
-
-    let passes = (0..levels)
-        .map(|level| (resampling(level, Op::Halve), down(level + 1)))
-        .chain([(axes.each_ref().map(gauss), up(levels))])
-        .chain(
-            (0..levels)
-                .rev()
-                .map(|level| (resampling(level, Op::Double), up(level))),
-        );
-    let mut passes: Vec<([Op<'_>; 2], [Span; 2])> = passes.collect();
-    let (last_ops, last_spans) = passes.pop().unwrap();
+    let (last, passes) = passes.split_last().unwrap();
     let mut current: Option<Plane> = None;
     // Only the image a pass reads and the one it writes are alive at a time, so the memory of the
     // image before goes to the next one.
     let mut spare = Vec::new();
 
-    for (ops, spans) in passes {
-        let mut plane = Plane::new(spans, core::mem::take(&mut spare));
+    for pass in passes {
+        let mut plane = Plane::new(pass.spans, core::mem::take(&mut spare));
         let input = current.as_ref().map_or(Input::Source(src), Input::Plane);
-        fill_plane(simd, input, ops, &mut plane);
+        fill_plane(simd, input, ops(pass), &mut plane);
 
         if let Some(previous) = current.replace(plane) {
             spare = previous.data;
@@ -80,14 +58,7 @@ fn blur<S: MulQ15>(simd: S, src: Source<'_>, dst: Target<'_>, axes: &[Axis; 2]) 
     }
 
     let input = current.as_ref().map_or(Input::Source(src), Input::Plane);
-    fill_target(simd, input, last_ops, last_spans, dst);
-}
-
-fn gauss(axis: &Axis) -> Op<'_> {
-    match axis.weights.as_slice() {
-        [] => Op::Copy,
-        weights => Op::Gauss(weights),
-    }
+    fill_target(simd, input, ops(last), last.spans, dst);
 }
 
 /// An intermediate image on `x` × `y` with transparent padding.
