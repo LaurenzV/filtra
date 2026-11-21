@@ -50,6 +50,41 @@ impl<I> Filter<I> {
         &self.nodes
     }
 
+    /// Converts from `&Filter<I>` to `Filter<&I>`.
+    pub fn as_ref(&self) -> Filter<&I> {
+        let nodes = self.nodes.iter().map(|node| Node {
+            primitive: node.primitive.as_ref(),
+            inputs: node.inputs.clone(),
+            subregion: node.subregion,
+            color_interpolation: node.color_interpolation,
+        });
+
+        Filter {
+            region: self.region,
+            nodes: nodes.collect(),
+        }
+    }
+
+    /// The filter with the content of each `feImage` mapped by `f`.
+    pub fn try_map_images<J, E>(
+        self,
+        mut f: impl FnMut(I) -> Result<J, E>,
+    ) -> Result<Filter<J>, E> {
+        let nodes = self.nodes.into_iter().map(|node| {
+            Ok(Node {
+                primitive: node.primitive.try_map_image(&mut f)?,
+                inputs: node.inputs,
+                subregion: node.subregion,
+                color_interpolation: node.color_interpolation,
+            })
+        });
+
+        Ok(Filter {
+            region: self.region,
+            nodes: nodes.collect::<Result<_, E>>()?,
+        })
+    }
+
     /// The filter primitive subregion of each node, with missing attributes filled in (§9.4).
     pub fn subregions(&self) -> Vec<Rect> {
         let mut subregions: Vec<Rect> = Vec::with_capacity(self.nodes.len());
@@ -236,8 +271,57 @@ impl<I> From<Nodes<I>> for Filter<I> {
     }
 }
 
-#[cfg(all(test, feature = "serde", feature = "merge", feature = "offset"))]
+#[cfg(all(test, feature = "offset"))]
 mod tests {
+    use super::*;
+    use crate::Offset;
+    use alloc::string::{String, ToString};
+
+    #[test]
+    fn maps_images_and_keeps_the_rest() {
+        let mut filter = Filter::new(Rect::new(0.0, 0.0, 100.0, 100.0));
+        let image = filter.push(Node::new(Primitive::Image(1), []));
+        let offset = Offset { dx: 5.0, dy: 5.0 };
+        filter.push(Node::new(Primitive::Offset(offset), [image]));
+        filter.push(Node::new(Primitive::Image(2), []));
+
+        let mapped = filter
+            .try_map_images(|id| Ok::<_, ()>(id.to_string()))
+            .unwrap();
+
+        let primitives: Vec<&Primitive<String>> =
+            mapped.nodes().iter().map(|node| &node.primitive).collect();
+        assert_eq!(
+            primitives,
+            [
+                &Primitive::Image("1".to_string()),
+                &Primitive::Offset(offset),
+                &Primitive::Image("2".to_string()),
+            ]
+        );
+        assert_eq!(mapped.nodes()[1].inputs, [Input::Result(0)]);
+    }
+
+    #[test]
+    fn mapping_images_stops_at_the_first_error() {
+        let mut filter = Filter::new(Rect::new(0.0, 0.0, 100.0, 100.0));
+        filter.push(Node::new(Primitive::Image(1), []));
+        filter.push(Node::new(Primitive::Image(2), []));
+        filter.push(Node::new(Primitive::Image(3), []));
+        let mut visited = Vec::new();
+
+        let result = filter.as_ref().try_map_images(|&id| {
+            visited.push(id);
+            if id == 2 { Err(id) } else { Ok(id) }
+        });
+
+        assert_eq!(result, Err(2));
+        assert_eq!(visited, [1, 2]);
+    }
+}
+
+#[cfg(all(test, feature = "serde", feature = "merge", feature = "offset"))]
+mod serde_tests {
     use super::*;
     use crate::{Merge, Offset};
 

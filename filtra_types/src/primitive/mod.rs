@@ -128,3 +128,83 @@ pub enum Primitive<I> {
     #[cfg(feature = "turbulence")]
     Turbulence(Turbulence),
 }
+
+impl<I> Primitive<I> {
+    /// Converts from `&Primitive<I>` to `Primitive<&I>`.
+    pub fn as_ref(&self) -> Primitive<&I> {
+        match self {
+            #[cfg(feature = "blend")]
+            Self::Blend(blend) => Primitive::Blend(*blend),
+            #[cfg(feature = "color-matrix")]
+            Self::ColorMatrix(matrix) => Primitive::ColorMatrix(*matrix),
+            #[cfg(feature = "component-transfer")]
+            Self::ComponentTransfer(transfer) => Primitive::ComponentTransfer(transfer.clone()),
+            #[cfg(feature = "composite")]
+            Self::Composite(composite) => Primitive::Composite(*composite),
+            #[cfg(feature = "convolve-matrix")]
+            Self::ConvolveMatrix(convolve) => Primitive::ConvolveMatrix(convolve.clone()),
+            #[cfg(feature = "diffuse-lighting")]
+            Self::DiffuseLighting(lighting) => Primitive::DiffuseLighting(*lighting),
+            #[cfg(feature = "displacement-map")]
+            Self::DisplacementMap(map) => Primitive::DisplacementMap(*map),
+            #[cfg(feature = "drop-shadow")]
+            Self::DropShadow(shadow) => Primitive::DropShadow(*shadow),
+            #[cfg(feature = "flood")]
+            Self::Flood(flood) => Primitive::Flood(*flood),
+            #[cfg(feature = "gaussian-blur")]
+            Self::GaussianBlur(blur) => Primitive::GaussianBlur(*blur),
+            Self::Image(image) => Primitive::Image(image),
+            #[cfg(feature = "merge")]
+            Self::Merge(merge) => Primitive::Merge(*merge),
+            #[cfg(feature = "morphology")]
+            Self::Morphology(morphology) => Primitive::Morphology(*morphology),
+            #[cfg(feature = "offset")]
+            Self::Offset(offset) => Primitive::Offset(*offset),
+            #[cfg(feature = "specular-lighting")]
+            Self::SpecularLighting(lighting) => Primitive::SpecularLighting(*lighting),
+            #[cfg(feature = "tile")]
+            Self::Tile(tile) => Primitive::Tile(*tile),
+            #[cfg(feature = "turbulence")]
+            Self::Turbulence(turbulence) => Primitive::Turbulence(*turbulence),
+        }
+    }
+
+    /// The primitive with the content of an `feImage` mapped by `f`.
+    pub fn try_map_image<J, E>(self, f: impl FnOnce(I) -> Result<J, E>) -> Result<Primitive<J>, E> {
+        Ok(match self {
+            #[cfg(feature = "blend")]
+            Self::Blend(blend) => Primitive::Blend(blend),
+            #[cfg(feature = "color-matrix")]
+            Self::ColorMatrix(matrix) => Primitive::ColorMatrix(matrix),
+            #[cfg(feature = "component-transfer")]
+            Self::ComponentTransfer(transfer) => Primitive::ComponentTransfer(transfer),
+            #[cfg(feature = "composite")]
+            Self::Composite(composite) => Primitive::Composite(composite),
+            #[cfg(feature = "convolve-matrix")]
+            Self::ConvolveMatrix(convolve) => Primitive::ConvolveMatrix(convolve),
+            #[cfg(feature = "diffuse-lighting")]
+            Self::DiffuseLighting(lighting) => Primitive::DiffuseLighting(lighting),
+            #[cfg(feature = "displacement-map")]
+            Self::DisplacementMap(map) => Primitive::DisplacementMap(map),
+            #[cfg(feature = "drop-shadow")]
+            Self::DropShadow(shadow) => Primitive::DropShadow(shadow),
+            #[cfg(feature = "flood")]
+            Self::Flood(flood) => Primitive::Flood(flood),
+            #[cfg(feature = "gaussian-blur")]
+            Self::GaussianBlur(blur) => Primitive::GaussianBlur(blur),
+            Self::Image(image) => Primitive::Image(f(image)?),
+            #[cfg(feature = "merge")]
+            Self::Merge(merge) => Primitive::Merge(merge),
+            #[cfg(feature = "morphology")]
+            Self::Morphology(morphology) => Primitive::Morphology(morphology),
+            #[cfg(feature = "offset")]
+            Self::Offset(offset) => Primitive::Offset(offset),
+            #[cfg(feature = "specular-lighting")]
+            Self::SpecularLighting(lighting) => Primitive::SpecularLighting(lighting),
+            #[cfg(feature = "tile")]
+            Self::Tile(tile) => Primitive::Tile(tile),
+            #[cfg(feature = "turbulence")]
+            Self::Turbulence(turbulence) => Primitive::Turbulence(turbulence),
+        })
+    }
+}
