@@ -62,6 +62,26 @@ impl<'a> Source<'a> {
         Some(&self.data[start..start + (x1 - x0) as usize * 4])
     }
 
+    pub(crate) fn copy_row(&self, y: i64, x0: i64, out: &mut [u8]) {
+        let rect = self.layout.rect;
+        let x1 = x0.saturating_add((out.len() / 4) as i64);
+        let from = x0.max(rect.x0.into()).min(x1);
+        let to = x1.min(rect.x1.into()).max(from);
+        let (start, stop) = ((from - x0) as usize * 4, (to - x0) as usize * 4);
+        let row = i32::try_from(y)
+            .ok()
+            .and_then(|y| self.row(y, from as i32, to as i32));
+
+        out[..start].fill(0);
+
+        match row {
+            Some(row) => out[start..stop].copy_from_slice(row),
+            None => out[start..stop].fill(0),
+        }
+
+        out[stop..].fill(0);
+    }
+
     pub(crate) fn pixel(&self, x: i32, y: i32) -> Option<&'a [u8; 4]> {
         let rect = self.layout.rect;
         let covered = (rect.x0..rect.x1).contains(&x) && (rect.y0..rect.y1).contains(&y);
