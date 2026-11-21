@@ -12,8 +12,13 @@ repository.workspace = true
 [package.metadata.docs.rs]
 all-features = true
 
+[dependencies]
+filtra_types = { workspace = true, optional = true }
+
 [features]
 default = ["all"]
-all = ["gaussian-blur", "lighting"]
+all = ["convolve-matrix", "gaussian-blur", "lighting", "turbulence"]
+convolve-matrix = ["dep:filtra_types", "filtra_types/convolve-matrix"]
 gaussian-blur = []
 lighting = []
+turbulence = []

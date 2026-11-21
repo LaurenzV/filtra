@@ -17,9 +17,13 @@ mod buffers;
 mod planner;
 
 pub use buffers::{Buffers, assign_buffers};
+#[cfg(feature = "convolve-matrix")]
+pub use filtra_core::Convolution;
+#[cfg(feature = "turbulence")]
+pub use filtra_core::Turbulence;
 pub use filtra_core::{ColorSpace, IntRect};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-pub use filtra_core::{Light, Reflection};
+pub use filtra_core::{Light, Lighting, Reflection};
 #[cfg(feature = "blend")]
 pub use filtra_types::BlendMode;
 #[cfg(feature = "displacement-map")]
@@ -179,18 +183,8 @@ pub enum Step {
     Turbulence {
         /// The destination.
         dst: ImageId,
-        /// The base frequencies along the x- and y-axis, in cycles per pixel.
-        base_frequency: [f32; 2],
-        /// The number of octaves.
-        octaves: u32,
-        /// The seed of the random numbers.
-        seed: i64,
-        /// The pixels of the subregion, if the noise is stitched to it.
-        stitch_tile: Option<IntRect>,
-        /// Whether to sum the octaves (`fractalNoise`) instead of their absolute values.
-        fractal_noise: bool,
-        /// The position of the noise's origin in pixels.
-        origin: [f32; 2],
+        /// The noise.
+        turbulence: Turbulence,
     },
     #[cfg(feature = "color-matrix")]
     /// Transforms the unpremultiplied colors of an image with a matrix.
@@ -220,18 +214,8 @@ pub enum Step {
         src: ImageId,
         /// The destination.
         dst: ImageId,
-        /// The number of columns and rows of `weights`.
-        size: [u32; 2],
-        /// The weights in row-major order, each multiplying the pixel it covers.
-        weights: Vec<f32>,
-        /// The column and row of the weight that covers the pixel being computed.
-        target: [u32; 2],
-        /// The value added to alpha, and times alpha to each color.
-        bias: f32,
-        /// How `src` is extended beyond the edges of `dst`.
-        edge_mode: EdgeMode,
-        /// Whether only the unpremultiplied colors are convolved, keeping alpha.
-        preserve_alpha: bool,
+        /// The convolution.
+        convolution: Convolution,
     },
     #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
     /// Lights the alpha of `src` as a height map, sampled at the top-left corner of each pixel.
@@ -240,18 +224,8 @@ pub enum Step {
         src: ImageId,
         /// The destination.
         dst: ImageId,
-        /// The reflection model.
-        reflection: Reflection,
-        /// The height of the surface where alpha is 1, in user units.
-        surface_scale: f32,
-        /// The light source in user space.
-        light: Light,
-        /// The color of the light in the color space of the result.
-        color: [f32; 3],
-        /// The number of pixels per user unit along the x- and y-axis.
-        scale: [f32; 2],
-        /// The position of the user-space origin in pixels.
-        origin: [f32; 2],
+        /// The lighting.
+        lighting: Lighting,
     },
     #[cfg(feature = "gaussian-blur")]
     /// Blurs an image with a Gaussian.

@@ -1,8 +1,8 @@
-use fearless_simd::{Simd, u16x16};
+use fearless_simd::Simd;
 
 use crate::dispatch::dispatch;
 use crate::pixmap::for_each_segment;
-use crate::simd::{Wide, combine, div255, for_each_chunk};
+use crate::simd::{Wide, combine, for_each_chunk, source_over};
 use crate::{Source, Target};
 
 /// `feMerge`.
@@ -13,11 +13,6 @@ pub fn merge(inputs: &[Source<'_>], dst: Target<'_>) {
 #[inline(always)]
 fn merge_inner<S: Simd>(simd: S, inputs: &[Source<'_>], mut dst: Target<'_>) {
     let mut rows = Vec::with_capacity(inputs.len());
-
-    let over = {
-        #[inline(always)]
-        |cs: u16x16<S>, sa: u16x16<S>, cb: u16x16<S>, _: u16x16<S>| cs + div255(cb * (255 - sa))
-    };
 
     for_each_segment(&mut dst, inputs.iter().map(Source::rect), {
         #[inline(always)]
@@ -36,7 +31,8 @@ fn merge_inner<S: Simd>(simd: S, inputs: &[Source<'_>], mut dst: Target<'_>) {
                             #[inline(always)]
                             |_, [source]: [&[u8; 32]; 1], output: &mut [u8; 32]| {
                                 let backdrop = Wide::load(simd, output);
-                                combine(Wide::load(simd, source), backdrop, over).store(output);
+                                combine(Wide::load(simd, source), backdrop, source_over)
+                                    .store(output);
                             }
                         });
                     }

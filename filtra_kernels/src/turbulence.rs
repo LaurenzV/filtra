@@ -1,32 +1,15 @@
 use fearless_simd::{Simd, f32x4, f32x8, prelude::*};
 
 use crate::dispatch::dispatch;
-use crate::simd::{for_each_chunk, pack, premultiply};
-use crate::{IntRect, Target};
-
-/// Perlin turbulence (`feTurbulence`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Turbulence {
-    /// The base frequencies along the x- and y-axis, in cycles per pixel.
-    pub base_frequency: [f32; 2],
-    /// The number of octaves.
-    pub octaves: u32,
-    /// The seed of the random numbers.
-    pub seed: i64,
-    /// The pixels the noise tiles, if it is stitched.
-    pub stitch_tile: Option<IntRect>,
-    /// Whether to sum the octaves (`fractalNoise`) instead of their absolute values.
-    pub fractal_noise: bool,
-    /// The position of the noise's origin in pixels.
-    pub origin: [f32; 2],
-}
+use crate::simd::{for_each_output_chunk, pack, premultiply};
+use crate::{Target, Turbulence};
 
 /// `feTurbulence`, sampled at the top-left corner of each pixel.
 pub fn turbulence(dst: Target<'_>, turbulence: &Turbulence) {
     let lattice = Lattice::new(turbulence.seed);
     let noise = Noise::new(turbulence);
 
-    dispatch!(simd => render(simd, &lattice, &noise, dst));
+    dispatch!(simd => turbulence_inner(simd, &lattice, &noise, dst));
 }
 
 // The spec allows clamping the number of octaves (§9.21); later octaves change the result by
@@ -42,7 +25,7 @@ const RAND_Q: i64 = 127773;
 const RAND_R: i64 = 2836;
 
 #[inline(always)]
-fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_>) {
+fn turbulence_inner<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_>) {
     let rect = dst.rect();
     let select = {
         #[inline(always)]
@@ -110,9 +93,9 @@ fn render<S: Simd>(simd: S, lattice: &Lattice, noise: &Noise, mut dst: Target<'_
             factor *= 2.0;
         }
 
-        for_each_chunk::<0>([], row, {
+        for_each_output_chunk(row, {
             #[inline(always)]
-            |i, [], pixels: &mut [u8; 32]| {
+            |i, pixels: &mut [u8; 32]| {
                 let sums = &sums[i * 32..][..32];
                 let load = {
                     #[inline(always)]

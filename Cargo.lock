@@ -112,6 +112,9 @@ dependencies = [
 [[package]]
 name = "filtra_core"
 version = "0.1.0"
+dependencies = [
+ "filtra_types",
+]
 
 [[package]]
 name = "filtra_kernels"

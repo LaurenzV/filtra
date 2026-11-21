@@ -61,12 +61,12 @@ pub use component_transfer::component_transfer;
 #[cfg(feature = "composite")]
 pub use composite::composite;
 #[cfg(feature = "convolve-matrix")]
-pub use convolve_matrix::{Convolution, convolve_matrix};
+pub use convolve_matrix::convolve_matrix;
 #[cfg(feature = "displacement-map")]
 pub use displacement_map::displacement_map;
 pub use flood::flood;
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-pub use lighting::{Lighting, lighting};
+pub use lighting::lighting;
 #[cfg(feature = "merge")]
 pub use merge::merge;
 #[cfg(feature = "morphology")]
@@ -76,11 +76,15 @@ pub use pixmap::{Source, Target};
 #[cfg(feature = "tile")]
 pub use tile::tile;
 #[cfg(feature = "turbulence")]
-pub use turbulence::{Turbulence, turbulence};
+pub use turbulence::turbulence;
 
+#[cfg(feature = "convolve-matrix")]
+pub use filtra_core::Convolution;
+#[cfg(feature = "turbulence")]
+pub use filtra_core::Turbulence;
 pub use filtra_core::{ColorSpace, IntRect};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-pub use filtra_core::{Light, Reflection};
+pub use filtra_core::{Light, Lighting, Reflection};
 #[cfg(feature = "blend")]
 pub use filtra_types::BlendMode;
 #[cfg(feature = "displacement-map")]

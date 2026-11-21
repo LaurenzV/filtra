@@ -3,7 +3,7 @@ use filtra_types::CompositeOperator;
 
 use crate::arithmetic::arithmetic;
 use crate::dispatch::dispatch;
-use crate::simd::{Wide, combine, div255, for_each_pixel_chunk};
+use crate::simd::{Wide, combine, div255, for_each_pixel_chunk, source_over};
 use crate::{Source, Target};
 
 /// `feComposite`.
@@ -38,7 +38,7 @@ fn composite_inner<S: Simd>(
                 CompositeOperator::Out => div255(cs * (255 - ba)),
                 CompositeOperator::Atop => div255(cs * ba + cb * (255 - sa)),
                 CompositeOperator::Xor => div255(cs * (255 - ba) + cb * (255 - sa)),
-                _ => cs + div255(cb * (255 - sa)),
+                _ => source_over(cs, sa, cb, ba),
             }
         }),
     }

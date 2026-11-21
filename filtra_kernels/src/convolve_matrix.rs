@@ -2,28 +2,11 @@ use fearless_simd::{Simd, f32x8, prelude::*};
 use filtra_types::EdgeMode;
 
 use crate::dispatch::dispatch;
-use crate::simd::{for_each_chunk, pack, premultiply, unpack, unpremultiply};
-use crate::{IntRect, Source, Target};
-
-/// The parameters of [`convolve_matrix`].
-#[derive(Debug, Clone, Copy)]
-pub struct Convolution<'a> {
-    /// The number of columns and rows of `weights`.
-    pub size: [u32; 2],
-    /// The weights in row-major order, each multiplying the pixel it covers.
-    pub weights: &'a [f32],
-    /// The column and row of the weight that covers the pixel being computed.
-    pub target: [u32; 2],
-    /// The value added to alpha, and times alpha to each color.
-    pub bias: f32,
-    /// How the input is extended beyond the edges of the target.
-    pub edge_mode: EdgeMode,
-    /// Whether only the unpremultiplied colors are convolved, keeping alpha.
-    pub preserve_alpha: bool,
-}
+use crate::simd::{for_each_output_chunk, pack, premultiply, unpack, unpremultiply};
+use crate::{Convolution, IntRect, Source, Target};
 
 /// `feConvolveMatrix`, in pixels.
-pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convolution<'_>) {
+pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convolution) {
     let [columns, rows] = convolution.size;
     let [target_x, target_y] = convolution.target;
 
@@ -37,11 +20,16 @@ pub fn convolve_matrix(src: Source<'_>, dst: Target<'_>, convolution: &Convoluti
         "the target is outside the weights"
     );
 
-    dispatch!(simd => convolve(simd, src, dst, convolution));
+    dispatch!(simd => convolve_matrix_inner(simd, src, dst, convolution));
 }
 
 #[inline(always)]
-fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution: &Convolution<'_>) {
+fn convolve_matrix_inner<S: Simd>(
+    simd: S,
+    src: Source<'_>,
+    mut dst: Target<'_>,
+    convolution: &Convolution,
+) {
     let rect = dst.rect();
 
     if rect.is_empty() {
@@ -61,6 +49,8 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
     let channels = if preserve_alpha { 3 } else { 4 };
     let bias = f32x8::splat(simd, convolution.bias);
     let mut slots = vec![0; rows];
+    // Rows are converted in whole chunks, so the pixels past the width stay transparent.
+    let mut pixels = vec![0; input.width.next_multiple_of(8) * 4];
 
     for (y, (_, output)) in dst.rows_mut().enumerate() {
         for (i, slot) in slots.iter_mut().enumerate() {
@@ -74,7 +64,7 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
 
             if held[index] != Some(input_row) {
                 let planes = &mut cache[index * slot_len..][..slot_len];
-                input.fill(simd, src, input_row, planes, preserve_alpha);
+                input.fill(simd, src, input_row, &mut pixels, planes, preserve_alpha);
                 held[index] = Some(input_row);
             }
 
@@ -83,9 +73,9 @@ fn convolve<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, convolution:
 
         let center = slots[convolution.target[1] as usize] + 3 * input.stride + input.target_x;
 
-        for_each_chunk::<0>([], output, {
+        for_each_output_chunk(output, {
             #[inline(always)]
-            |i, [], output: &mut [u8; 32]| {
+            |i, output: &mut [u8; 32]| {
                 let x = 8 * i;
                 let mut sums = [f32x8::splat(simd, 0.0); 4];
 
@@ -142,7 +132,7 @@ struct ExtendedRows {
 }
 
 impl ExtendedRows {
-    fn new(rect: IntRect, convolution: &Convolution<'_>) -> Self {
+    fn new(rect: IntRect, convolution: &Convolution) -> Self {
         let width = rect.width() as usize;
         let extended = width + convolution.size[0] as usize - 1;
 
@@ -162,6 +152,7 @@ impl ExtendedRows {
         simd: S,
         src: Source<'_>,
         row: Option<usize>,
+        pixels: &mut [u8],
         planes: &mut [f32],
         preserve_alpha: bool,
     ) {
@@ -171,29 +162,22 @@ impl ExtendedRows {
             return;
         };
 
-        let source = src.rect();
-        let (x0, x1) = (self.rect.x0.max(source.x0), self.rect.x1.min(source.x1));
+        let y = i64::from(self.rect.y0) + row as i64;
+        src.copy_row(y, self.rect.x0.into(), &mut pixels[..self.width * 4]);
 
-        if let Some(pixels) = src.row(self.rect.y0 + row as i32, x0, x1) {
-            let start = self.target_x + (x0 - self.rect.x0) as usize;
-            let (chunks, tail) = pixels.as_chunks::<32>();
-            let mut padded = [0; 32];
-            padded[..tail.len()].copy_from_slice(tail);
-            let padded = (!tail.is_empty()).then_some(&padded);
+        for (k, chunk) in pixels.as_chunks::<32>().0.iter().enumerate() {
+            let start = self.target_x + 8 * k;
+            let channels = unpack(simd, chunk);
+            let values = if preserve_alpha {
+                unpremultiply(channels)
+            } else {
+                let [r, g, b, a] = channels;
+                let scale = 1.0 / 255.0;
+                [r * scale, g * scale, b * scale, a * scale]
+            };
 
-            for (k, chunk) in chunks.iter().chain(padded).enumerate() {
-                let channels = unpack(simd, chunk);
-                let values = if preserve_alpha {
-                    unpremultiply(channels)
-                } else {
-                    let [r, g, b, a] = channels;
-                    let scale = 1.0 / 255.0;
-                    [r * scale, g * scale, b * scale, a * scale]
-                };
-
-                for (channel, value) in values.into_iter().enumerate() {
-                    value.store_slice(&mut planes[channel * self.stride + start + 8 * k..][..8]);
-                }
+            for (channel, value) in values.into_iter().enumerate() {
+                value.store_slice(&mut planes[channel * self.stride + start..][..8]);
             }
         }
 

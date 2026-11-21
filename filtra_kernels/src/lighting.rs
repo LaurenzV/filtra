@@ -1,25 +1,8 @@
 use fearless_simd::{Simd, f32x8, prelude::*};
 
 use crate::dispatch::dispatch;
-use crate::simd::{for_each_chunk, pack, pow};
-use crate::{IntRect, Light, Reflection, Source, Target};
-
-/// Lighting of the alpha of an image as a height map (`feDiffuseLighting`, `feSpecularLighting`).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Lighting {
-    /// The reflection model.
-    pub reflection: Reflection,
-    /// The height of the surface where alpha is 1, in user units.
-    pub surface_scale: f32,
-    /// The light source in user space.
-    pub light: Light,
-    /// The color of the light in the color space of the result.
-    pub color: [f32; 3],
-    /// The number of pixels per user unit along the x- and y-axis.
-    pub scale: [f32; 2],
-    /// The position of the user-space origin in pixels.
-    pub origin: [f32; 2],
-}
+use crate::simd::{for_each_output_chunk, pack, pow};
+use crate::{IntRect, Light, Lighting, Reflection, Source, Target};
 
 /// `feDiffuseLighting` and `feSpecularLighting`.
 pub fn lighting(src: Source<'_>, dst: Target<'_>, lighting: &Lighting) {
@@ -39,11 +22,12 @@ fn lighting_inner<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, lighti
     // for reading a full chunk past the end.
     let mut rows: [Vec<f32>; 3] = core::array::from_fn(|_| vec![0.0; width + 10]);
     let mut slopes = [vec![0.0; width + 8], vec![0.0; width + 8]];
+    let mut pixels = vec![0; width * 4];
 
-    alpha_row(src, rect, 0, &mut rows[1]);
+    alpha_row(src, rect, 0, &mut pixels, &mut rows[1]);
 
     if height > 1 {
-        alpha_row(src, rect, 1, &mut rows[2]);
+        alpha_row(src, rect, 1, &mut pixels, &mut rows[2]);
     }
 
     for (y, (_, output)) in dst.rows_mut().enumerate() {
@@ -51,7 +35,7 @@ fn lighting_inner<S: Simd>(simd: S, src: Source<'_>, mut dst: Target<'_>, lighti
             rows.rotate_left(1);
 
             if y + 1 < height {
-                alpha_row(src, rect, y + 1, &mut rows[2]);
+                alpha_row(src, rect, y + 1, &mut pixels, &mut rows[2]);
             }
         }
 
@@ -143,9 +127,9 @@ fn shade<S: Simd>(
     let user_y = (rect.y0 as f32 + y as f32 - lighting.origin[1]) / scale_y;
     let [red, green, blue] = lighting.color;
 
-    for_each_chunk::<0>([], output, {
+    for_each_output_chunk(output, {
         #[inline(always)]
-        |i, [], output: &mut [u8; 32]| {
+        |i, output: &mut [u8; 32]| {
             let x = 8 * i;
             let load = {
                 #[inline(always)]
@@ -255,22 +239,11 @@ fn towards<S: Simd>(position: [f32; 3], point: [f32x8<S>; 3]) -> ([f32x8<S>; 3],
 }
 
 #[inline(always)]
-fn alpha_row(src: Source<'_>, rect: IntRect, y: usize, row: &mut [f32]) {
-    row.fill(0.0);
+fn alpha_row(src: Source<'_>, rect: IntRect, y: usize, pixels: &mut [u8], row: &mut [f32]) {
+    src.copy_row(i64::from(rect.y0) + y as i64, rect.x0.into(), pixels);
 
-    let source = src.rect();
-    let (x0, x1) = (rect.x0.max(source.x0), rect.x1.min(source.x1));
-
-    if let Some(pixels) = src.row(rect.y0 + y as i32, x0, x1) {
-        let start = 1 + (x0 - rect.x0) as usize;
-        let pixels = pixels.as_chunks::<4>().0;
-        let alphas = pixels
-            .iter()
-            .map(|pixel| f32::from(pixel[3]) * (1.0 / 255.0));
-
-        for (value, alpha) in row[start..].iter_mut().zip(alphas) {
-            *value = alpha;
-        }
+    for (value, pixel) in row[1..].iter_mut().zip(pixels.as_chunks::<4>().0) {
+        *value = f32::from(pixel[3]) * (1.0 / 255.0);
     }
 
     let width = rect.width() as usize;

@@ -66,6 +66,16 @@ pub(crate) fn div255<S: Simd>(x: u16x16<S>) -> u16x16<S> {
 }
 
 #[inline(always)]
+pub(crate) fn source_over<S: Simd>(
+    cs: u16x16<S>,
+    sa: u16x16<S>,
+    cb: u16x16<S>,
+    _: u16x16<S>,
+) -> u16x16<S> {
+    cs + div255(cb * (255 - sa))
+}
+
+#[inline(always)]
 pub(crate) fn for_each_chunk<const N: usize>(
     inputs: [Option<&[u8]>; N],
     output: &mut [u8],
@@ -95,6 +105,14 @@ pub(crate) fn for_each_chunk<const N: usize>(
     if !tail.is_empty() {
         tail.copy_from_slice(&padded_output[..tail.len()]);
     }
+}
+
+#[inline(always)]
+pub(crate) fn for_each_output_chunk(output: &mut [u8], mut f: impl FnMut(usize, &mut [u8; 32])) {
+    for_each_chunk::<0>([], output, {
+        #[inline(always)]
+        |i, [], output| f(i, output)
+    });
 }
 
 #[inline(always)]
