@@ -30,15 +30,24 @@ jobs:
       - run: cargo check -p filtra -p filtra_types -p filtra_plan -p filtra_kernels
 
   test:
+    name: test (${{ matrix.name }})
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - name: ubuntu-latest
+            os: ubuntu-latest
+          - name: ubuntu-latest, SSE2
+            os: ubuntu-latest
+            rustflags: --cfg disable_dispatch_avx2
+          - name: macos-latest
+            os: macos-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-      # TODO: Test every x86 level the kernels dispatch to (SSE2 and AVX2), not only the runner's best.
       - run: cargo test --workspace --all-features
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
 
   test-wasm:
     name: test (${{ matrix.target }})
