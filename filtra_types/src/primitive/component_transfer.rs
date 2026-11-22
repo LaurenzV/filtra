@@ -42,3 +42,16 @@ pub enum TransferFunction {
         offset: f32,
     },
 }
+
+impl TransferFunction {
+    /// The value of the `type` attribute.
+    pub const fn keyword(&self) -> &'static str {
+        match self {
+            Self::Identity => "identity",
+            Self::Table(_) => "table",
+            Self::Discrete(_) => "discrete",
+            Self::Linear { .. } => "linear",
+            Self::Gamma { .. } => "gamma",
+        }
+    }
+}

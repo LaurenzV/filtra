@@ -20,3 +20,13 @@ pub enum MorphologyOperator {
     /// The component-wise maximum over the kernel.
     Dilate,
 }
+
+impl MorphologyOperator {
+    /// The value of the `operator` attribute.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::Erode => "erode",
+            Self::Dilate => "dilate",
+        }
+    }
+}

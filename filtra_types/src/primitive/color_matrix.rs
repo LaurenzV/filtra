@@ -21,6 +21,16 @@ impl ColorMatrix {
         0.0, 0.0, 1.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 1.0, 0.0,
     ];
+
+    /// The value of the `type` attribute.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::Matrix(_) => "matrix",
+            Self::Saturate(_) => "saturate",
+            Self::HueRotate(_) => "hueRotate",
+            Self::LuminanceToAlpha => "luminanceToAlpha",
+        }
+    }
 }
 
 impl Default for ColorMatrix {

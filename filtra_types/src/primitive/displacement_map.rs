@@ -24,3 +24,15 @@ pub enum ColorChannel {
     #[default]
     A,
 }
+
+impl ColorChannel {
+    /// The value of the `xChannelSelector` and `yChannelSelector` attributes.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::R => "R",
+            Self::G => "G",
+            Self::B => "B",
+            Self::A => "A",
+        }
+    }
+}

@@ -35,3 +35,18 @@ pub enum CompositeOperator {
         k4: f32,
     },
 }
+
+impl CompositeOperator {
+    /// The value of the `operator` attribute.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::Over => "over",
+            Self::In => "in",
+            Self::Out => "out",
+            Self::Atop => "atop",
+            Self::Xor => "xor",
+            Self::Lighter => "lighter",
+            Self::Arithmetic { .. } => "arithmetic",
+        }
+    }
+}
