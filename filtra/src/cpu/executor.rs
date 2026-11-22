@@ -1,50 +1,54 @@
+use filtra_kernels::{Source, Target};
+
 use super::{Backend, PixmapMut};
-use filtra_kernels::{IntRect, Source, Target};
-use filtra_plan::{ImageId, Pass, Plan, Step};
+use crate::IntRect;
+use crate::plan::{ImageId, Plan, Step};
 
-pub(super) fn execute(
-    plan: &Plan,
-    pixmap: PixmapMut<'_>,
-    backend: &mut Backend,
-    render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
-) {
-    let assignment = filtra_plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
-    let mut images: Vec<Image> = (plan.rects.iter().zip(assignment.images))
-        .map(|(&rect, buffer)| Image {
-            location: buffer.map_or(Location::Source, Location::Buffer),
-            rect,
-        })
-        .collect();
+impl Backend {
+    pub(crate) fn execute(
+        &mut self,
+        plan: &Plan,
+        pixmap: PixmapMut<'_>,
+        render_image: &mut dyn FnMut(usize, IntRect, &mut [u8]),
+    ) {
+        let assignment = crate::plan::assign_buffers(&plan.steps, &plan.rects, plan.output);
+        let mut images: Vec<Image> = (plan.rects.iter().zip(&assignment.images))
+            .map(|(&rect, &buffer)| Image {
+                location: buffer.map_or(Location::Source, Location::Buffer),
+                rect,
+            })
+            .collect();
 
-    let in_place = plan.steps.last().is_some_and(|last| {
-        last.writes() == plan.output
-            // `render_image` needs the rows of the image to be contiguous.
-            && !matches!(last, Step::Image { .. })
-            && last.reads().all(|read| Some(read) != plan.source)
-    });
-
-    if in_place {
-        images[plan.output.0].location = Location::Output;
-    }
-
-    let mut store = Store {
-        pixmap,
-        images,
-        buffers: backend.take(assignment.count),
-    };
-
-    for step in &plan.steps {
-        execute_step(step, &mut store, render_image);
-    }
-
-    if !in_place {
-        let rect = store.images[plan.output.0].rect;
-        store.write_pixmap(rect, |inputs, target| {
-            filtra_kernels::offset(inputs.read(plan.output), target, [0, 0]);
+        let in_place = plan.steps.last().is_some_and(|last| {
+            last.writes() == plan.output
+                // `render_image` needs the rows of the image to be contiguous.
+                && !matches!(last, Step::Image { .. })
+                && last.reads().all(|read| assignment.images[read.0].is_some())
         });
-    }
 
-    backend.keep(store.buffers);
+        if in_place {
+            images[plan.output.0].location = Location::Output;
+        }
+
+        let mut store = Store {
+            pixmap,
+            images,
+            buffers: self.take(assignment.count),
+        };
+
+        for step in &plan.steps {
+            execute_step(step, &mut store, render_image);
+        }
+
+        if !in_place {
+            let rect = store.images[plan.output.0].rect;
+            store.write_pixmap(rect, |inputs, target| {
+                filtra_kernels::offset(inputs.read(plan.output), target, [0, 0]);
+            });
+        }
+
+        self.keep(store.buffers);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -160,14 +164,19 @@ fn execute_step(
         Step::Flood { dst, color } => store.write(*dst, |_, target| {
             filtra_kernels::flood(target, *color);
         }),
-        Step::Image { dst, image } => {
+        Step::Image { dst, node } => {
             let (rect, data) = store.buffer(*dst);
             data.fill(0);
 
             if !rect.is_empty() {
-                render_image(*image, rect, data);
+                render_image(*node, rect, data);
             }
         }
+        #[cfg(any(
+            feature = "offset",
+            feature = "morphology",
+            feature = "convolve-matrix"
+        ))]
         Step::Offset { src, dst, dx, dy } => store.write(*dst, |inputs, target| {
             filtra_kernels::offset(inputs.read(*src), target, [*dx, *dy]);
         }),
@@ -257,8 +266,6 @@ fn execute_step(
         Step::GaussianBlur { src, dst, std_dev } => store.write(*dst, |inputs, target| {
             filtra_kernels::gaussian_blur(inputs.read(*src), target, *std_dev);
         }),
-        // A dependency can enable a primitive on `filtra_plan` without enabling it here.
-        step => panic!("`filtra` is built without the feature for {step:?}"),
     }
 }
 

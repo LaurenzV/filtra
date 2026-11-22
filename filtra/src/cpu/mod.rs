@@ -7,9 +7,6 @@ use std::cmp::Reverse;
 
 pub use pixmap::PixmapMut;
 
-use crate::IntRect;
-use filtra_plan::Plan;
-
 /// A reusable backend for applying filters on the CPU.
 #[derive(Debug)]
 pub struct Backend {
@@ -52,23 +49,5 @@ impl Backend {
         self.buffers
             .sort_unstable_by_key(|buffer| Reverse(buffer.capacity()));
         self.buffers.truncate(self.max_buffers);
-    }
-}
-
-impl crate::Backend for Backend {
-    type Target<'a> = PixmapMut<'a>;
-    type Image<'a> = &'a mut [u8];
-
-    fn bounds(target: &PixmapMut<'_>) -> IntRect {
-        target.bounds()
-    }
-
-    fn execute(
-        &mut self,
-        plan: &Plan,
-        target: PixmapMut<'_>,
-        mut render_image: impl FnMut(usize, IntRect, &mut [u8]),
-    ) {
-        executor::execute(plan, target, self, &mut render_image);
     }
 }

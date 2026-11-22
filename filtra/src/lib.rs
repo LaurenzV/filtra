@@ -1,8 +1,8 @@
 //! Applies SVG and CSS filter effects to pixmaps.
 //!
 //! This crate applies arbitrary filter graphs, as defined in
-//! [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/), with any
-//! [`Backend`]. It provides [`cpu::Backend`], with SIMD kernels for NEON, AVX2 and WebAssembly.
+//! [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/), on the CPU, with
+//! SIMD kernels for NEON, AVX2 and WebAssembly.
 //!
 //! # Example
 //!
@@ -31,9 +31,9 @@
 //!
 //! # Applying a filter
 //!
-//! [`apply`] filters a target in place. The target holds the `SourceGraphic`: for [`cpu::Backend`],
-//! a [`cpu::PixmapMut`] of premultiplied sRGB RGBA8. Afterwards, it holds the result, and every
-//! pixel outside the filter region is transparent.
+//! [`apply`] filters a target in place. The target holds the `SourceGraphic`, as a
+//! [`cpu::PixmapMut`] of premultiplied sRGB RGBA8. Afterwards, it holds the result, and every pixel
+//! outside the filter region is transparent.
 //!
 //! The [`Transform`] maps the user space of the filter to the pixels of the target, and a negative
 //! scale flips an axis. Rotations and skews are left to the caller: apply the filter to content
@@ -41,8 +41,7 @@
 //!
 //! For each `feImage` node the result needs, `apply` calls `render_image` with the node's content,
 //! its filter primitive subregion in user space, and the pixels to render the content into: a rect
-//! in the pixel space of the target, and a transparent buffer of that size, for [`cpu::Backend`] in
-//! premultiplied RGBA8.
+//! in the pixel space of the target, and a transparent buffer of that size in premultiplied RGBA8.
 //!
 //! # Limitations
 //!
@@ -56,51 +55,45 @@
 #![forbid(unsafe_code)]
 
 pub mod cpu;
+mod plan;
 
-pub use filtra_plan as plan;
-pub use filtra_plan::{IntRect, Transform};
+pub use filtra_core::IntRect;
 pub use filtra_types as types;
 
-use filtra_plan::Plan;
+/// Applies `filter` to `target` in place, with `transform` mapping user space to its pixels.
+pub fn apply<I>(
+    backend: &mut cpu::Backend,
+    filter: &types::Filter<I>,
+    target: cpu::PixmapMut<'_>,
+    transform: Transform,
+    mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
+) {
+    let plan = plan::plan(filter, transform, target.bounds());
+    let subregions = filter.subregions();
 
-/// Executes the plans of filters.
-pub trait Backend {
-    /// The image that filters are applied to.
-    type Target<'a>;
-    /// The memory that the content of an `feImage` node is rendered into.
-    type Image<'a>;
-
-    /// The pixels `target` covers.
-    fn bounds(target: &Self::Target<'_>) -> IntRect;
-
-    /// Executes `plan` on `target`, rendering each `feImage` node with `render_image`.
-    fn execute(
-        &mut self,
-        plan: &Plan,
-        target: Self::Target<'_>,
-        render_image: impl FnMut(usize, IntRect, Self::Image<'_>),
-    );
+    backend.execute(&plan, target, &mut |node, rect, data| {
+        if let types::Primitive::Image(image) = &filter.nodes()[node].primitive {
+            render_image(image, subregions[node], rect, data);
+        }
+    });
 }
 
-/// Applies `filter` to `target` in place, with `transform` mapping user space to its pixels.
-pub fn apply<B: Backend, I>(
-    backend: &mut B,
-    filter: &types::Filter<I>,
-    target: B::Target<'_>,
-    transform: Transform,
-    mut render_image: impl FnMut(&I, types::Rect, IntRect, B::Image<'_>),
-) {
-    let plan = filtra_plan::plan(filter, transform, B::bounds(&target));
-    let images: Vec<(&I, types::Rect)> = (filter.nodes().iter())
-        .zip(filter.subregions())
-        .filter_map(|(node, subregion)| match &node.primitive {
-            types::Primitive::Image(image) => Some((image, subregion)),
-            _ => None,
-        })
-        .collect();
+/// A scale and translation that maps user space to pixels.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Transform {
+    /// The horizontal scale.
+    pub sx: f32,
+    /// The vertical scale.
+    pub sy: f32,
+    /// The horizontal translation in pixels.
+    pub tx: f32,
+    /// The vertical translation in pixels.
+    pub ty: f32,
+}
 
-    backend.execute(&plan, target, |image, rect, data| {
-        let (image, subregion) = images[image];
-        render_image(image, subregion, rect, data);
-    });
+impl Transform {
+    /// Creates a transform from its scales and translations.
+    pub const fn new(sx: f32, sy: f32, tx: f32, ty: f32) -> Self {
+        Self { sx, sy, tx, ty }
+    }
 }

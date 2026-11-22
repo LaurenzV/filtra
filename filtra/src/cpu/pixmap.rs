@@ -31,7 +31,7 @@ impl<'a> PixmapMut<'a> {
         }
     }
 
-    pub(super) fn bounds(&self) -> IntRect {
+    pub(crate) fn bounds(&self) -> IntRect {
         IntRect::new(
             0,
             0,

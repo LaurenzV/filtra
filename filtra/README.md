@@ -7,8 +7,8 @@
 Applies SVG and CSS filter effects to pixmaps.
 
 This crate applies arbitrary filter graphs, as defined in
-[Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/), with any backend. It
-provides a CPU backend, with SIMD kernels for NEON, AVX2 and WebAssembly.
+[Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/), on the CPU, with SIMD
+kernels for NEON, AVX2 and WebAssembly.
 
 ## Example
 
@@ -37,9 +37,9 @@ filtra::apply(&mut backend, &filter, pixmap, transform, |_, _, _, _| {});
 
 ## Applying a filter
 
-`apply` filters a target in place. The target holds the `SourceGraphic`: for `cpu::Backend`, a
-`cpu::PixmapMut` of premultiplied sRGB RGBA8. Afterwards, it holds the result, and every pixel
-outside the filter region is transparent.
+`apply` filters a target in place. The target holds the `SourceGraphic`, as a `cpu::PixmapMut` of
+premultiplied sRGB RGBA8. Afterwards, it holds the result, and every pixel outside the filter region
+is transparent.
 
 The `Transform` maps the user space of the filter to the pixels of the target, and a negative
 scale flips an axis. Rotations and skews are left to the caller: apply the filter to content
@@ -47,8 +47,7 @@ rendered without them, then draw the result with the rotation and skew that rema
 
 For each `feImage` node the result needs, `apply` calls `render_image` with the node's content, its
 filter primitive subregion in user space, and the pixels to render the content into: a rect in the
-pixel space of the target, and a transparent buffer of that size, for `cpu::Backend` in
-premultiplied RGBA8.
+pixel space of the target, and a transparent buffer of that size in premultiplied RGBA8.
 
 ## Limitations
 
