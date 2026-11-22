@@ -2,6 +2,7 @@
 //!
 //! This is an internal crate and not meant for external consumption.
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unsafe_code)]
 
 #[cfg(feature = "gaussian-blur")]

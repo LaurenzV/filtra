@@ -9,7 +9,14 @@
 //!
 //! On WebAssembly, the kernels only use SIMD when compiled with the `simd128` target feature, for
 //! example with `RUSTFLAGS="-C target-feature=+simd128"`.
+//!
+//! # Features
+//!
+//! Each filter primitive that has a kernel has a feature of the same name in kebab case, such as
+//! `gaussian-blur`. `all`, the default, enables every kernel, and `css-functions` enables the ones
+//! that filter functions need.
 
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unsafe_code)]
 
 mod alpha;

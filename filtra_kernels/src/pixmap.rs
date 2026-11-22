@@ -1,3 +1,5 @@
+use core::fmt;
+
 use crate::IntRect;
 
 fn check_len(len: usize, width: u32, height: u32) {
@@ -17,7 +19,7 @@ fn stride(width: u32) -> usize {
 }
 
 /// A placed pixmap that a kernel reads. Pixels outside of it are transparent black.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct Source<'a> {
     data: &'a [u8],
     layout: Layout,
@@ -95,7 +97,6 @@ impl<'a> Source<'a> {
 }
 
 /// A placed pixmap that a kernel writes completely.
-#[derive(Debug)]
 pub struct Target<'a> {
     data: &'a mut [u8],
     layout: Layout,
@@ -147,6 +148,22 @@ impl<'a> Target<'a> {
             self.data
                 .copy_within(from..from + width, start + row * stride);
         }
+    }
+}
+
+impl fmt::Debug for Source<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Source")
+            .field("rect", &self.layout.rect)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for Target<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Target")
+            .field("rect", &self.layout.rect)
+            .finish_non_exhaustive()
     }
 }
 

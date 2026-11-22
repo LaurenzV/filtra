@@ -60,7 +60,7 @@ pub enum FilterFunction {
 impl FilterFunction {
     pub(crate) fn to_primitive<I>(self) -> Primitive<I> {
         match self {
-            // TODO: `EdgeMode::Duplicate` (§13.1) once the planner supports edge modes.
+            // The edge mode computes to `none` for the `filter` property (§13.1.9).
             #[cfg(feature = "gaussian-blur")]
             Self::Blur(std_dev) => Primitive::GaussianBlur(GaussianBlur {
                 std_dev_x: std_dev,

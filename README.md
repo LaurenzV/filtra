@@ -20,7 +20,7 @@ you need enabled.
 | [`filtra`](filtra) | Applies filters to pixmaps on the CPU. | [![crates.io](https://img.shields.io/crates/v/filtra.svg)](https://crates.io/crates/filtra) [![docs.rs](https://img.shields.io/docsrs/filtra.svg)](https://docs.rs/filtra) |
 | [`filtra_types`](filtra_types) | Types describing filter graphs. | [![crates.io](https://img.shields.io/crates/v/filtra_types.svg)](https://crates.io/crates/filtra_types) [![docs.rs](https://img.shields.io/docsrs/filtra_types.svg)](https://docs.rs/filtra_types) |
 | [`filtra_core`](filtra_core) | Internal: pixel-level types and algorithms shared by the other crates. | [![crates.io](https://img.shields.io/crates/v/filtra_core.svg)](https://crates.io/crates/filtra_core) [![docs.rs](https://img.shields.io/docsrs/filtra_core.svg)](https://docs.rs/filtra_core) |
-| [`filtra_kernels`](filtra_kernels) | The CPU kernels that execute the steps. | [![crates.io](https://img.shields.io/crates/v/filtra_kernels.svg)](https://crates.io/crates/filtra_kernels) [![docs.rs](https://img.shields.io/docsrs/filtra_kernels.svg)](https://docs.rs/filtra_kernels) |
+| [`filtra_kernels`](filtra_kernels) | SIMD CPU kernels for each filter primitive. | [![crates.io](https://img.shields.io/crates/v/filtra_kernels.svg)](https://crates.io/crates/filtra_kernels) [![docs.rs](https://img.shields.io/docsrs/filtra_kernels.svg)](https://docs.rs/filtra_kernels) |
 
 ## Notes
 

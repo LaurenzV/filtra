@@ -171,7 +171,6 @@ pub enum Input {
     SourceAlpha,
     /// The result of an earlier node of the same filter, by index.
     Result(usize),
-    // TODO: `BackgroundImage`, `BackgroundAlpha`, `FillPaint` and `StrokePaint`.
 }
 
 /// The `x`, `y`, `width` and `height` attributes of a filter primitive in user space.
