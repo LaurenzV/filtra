@@ -95,13 +95,4 @@ pub use filtra_core::Turbulence;
 pub use filtra_core::{ColorSpace, IntRect};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
 pub use filtra_core::{Light, Lighting, Reflection};
-#[cfg(feature = "blend")]
-pub use filtra_types::BlendMode;
-#[cfg(feature = "displacement-map")]
-pub use filtra_types::ColorChannel;
-#[cfg(feature = "composite")]
-pub use filtra_types::CompositeOperator;
-#[cfg(feature = "convolve-matrix")]
-pub use filtra_types::EdgeMode;
-#[cfg(feature = "morphology")]
-pub use filtra_types::MorphologyOperator;
+pub use filtra_types as types;
