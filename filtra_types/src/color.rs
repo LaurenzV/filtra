@@ -46,3 +46,14 @@ pub enum ColorInterpolation {
     #[default]
     LinearRgb,
 }
+
+impl ColorInterpolation {
+    /// The value of the `color-interpolation-filters` property.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Srgb => "sRGB",
+            Self::LinearRgb => "linearRGB",
+        }
+    }
+}

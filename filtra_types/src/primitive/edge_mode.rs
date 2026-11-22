@@ -11,3 +11,15 @@ pub enum EdgeMode {
     /// Extend with transparent black.
     None,
 }
+
+impl EdgeMode {
+    /// The value of the `edgeMode` attribute.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::Duplicate => "duplicate",
+            Self::Wrap => "wrap",
+            Self::Mirror => "mirror",
+            Self::None => "none",
+        }
+    }
+}

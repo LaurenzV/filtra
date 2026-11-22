@@ -46,3 +46,27 @@ pub enum BlendMode {
     /// `luminosity`.
     Luminosity,
 }
+
+impl BlendMode {
+    /// The keyword of the mode in the `mode` attribute and in CSS.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::Normal => "normal",
+            Self::Multiply => "multiply",
+            Self::Screen => "screen",
+            Self::Overlay => "overlay",
+            Self::Darken => "darken",
+            Self::Lighten => "lighten",
+            Self::ColorDodge => "color-dodge",
+            Self::ColorBurn => "color-burn",
+            Self::HardLight => "hard-light",
+            Self::SoftLight => "soft-light",
+            Self::Difference => "difference",
+            Self::Exclusion => "exclusion",
+            Self::Hue => "hue",
+            Self::Saturation => "saturation",
+            Self::Color => "color",
+            Self::Luminosity => "luminosity",
+        }
+    }
+}

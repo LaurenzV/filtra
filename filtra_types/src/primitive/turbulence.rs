@@ -39,3 +39,13 @@ pub enum TurbulenceType {
     #[default]
     Turbulence,
 }
+
+impl TurbulenceType {
+    /// The value of the `type` attribute.
+    pub const fn keyword(self) -> &'static str {
+        match self {
+            Self::FractalNoise => "fractalNoise",
+            Self::Turbulence => "turbulence",
+        }
+    }
+}
