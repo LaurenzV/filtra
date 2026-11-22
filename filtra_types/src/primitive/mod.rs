@@ -107,7 +107,7 @@ pub enum Primitive<I> {
     /// `feGaussianBlur`.
     #[cfg(feature = "gaussian-blur")]
     GaussianBlur(GaussianBlur),
-    /// `feImage`.
+    /// `feImage`, with the content it renders.
     Image(I),
     /// `feMerge`.
     #[cfg(feature = "merge")]
