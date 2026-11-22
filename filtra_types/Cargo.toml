@@ -56,3 +56,6 @@ specular-lighting = []
 tile = []
 turbulence = []
 serde = ["dep:serde"]
+
+[lints]
+workspace = true

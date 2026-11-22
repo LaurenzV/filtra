@@ -54,3 +54,6 @@ offset = ["filtra_types/offset"]
 specular-lighting = ["filtra_types/specular-lighting", "filtra_core/lighting", "filtra_kernels/specular-lighting"]
 tile = ["filtra_types/tile", "filtra_kernels/tile"]
 turbulence = ["filtra_types/turbulence", "filtra_core/turbulence", "filtra_kernels/turbulence"]
+
+[lints]
+workspace = true

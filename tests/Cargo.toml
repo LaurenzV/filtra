@@ -12,3 +12,6 @@ publish = false
 filtra = { workspace = true }
 roxmltree = "0.21.1"
 vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "png", "u8_pipeline"] }
+
+[lints]
+workspace = true

@@ -20,7 +20,7 @@ jobs:
           components: rustfmt, clippy
       - uses: taiki-e/install-action@cargo-hack
       - run: cargo fmt --check
-      - run: cargo hack clippy --workspace --each-feature -- -D warnings
+      - run: cargo hack clippy --workspace --each-feature --all-targets -- -D warnings
 
   msrv:
     runs-on: ubuntu-latest
