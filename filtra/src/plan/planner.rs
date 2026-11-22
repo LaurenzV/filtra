@@ -364,7 +364,8 @@ impl<'a, I> Planner<'a, I> {
                     dst,
                 }
             }
-            // A node with the wrong number of inputs for its primitive is transparent.
+            // A node with the wrong number of inputs for its primitive, or with a primitive whose
+            // feature is disabled, is transparent.
             _ => Step::Flood { dst, color: [0; 4] },
         };
 

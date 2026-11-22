@@ -61,8 +61,9 @@ pixel space of the target, and a transparent buffer of that size in premultiplie
 ## Features
 
 Each filter primitive has a feature of the same name in kebab case, such as `gaussian-blur`, which
-enables it in `types` and in `apply`. `all`, the default, enables every primitive, and `css-
-functions` enables the ones that filter functions need.
+lets `apply` evaluate it. `all`, the default, enables every primitive, and `css-functions` enables
+the ones that filter functions need. `apply` renders a primitive whose feature is disabled as
+transparent black.
 
 ## License
 

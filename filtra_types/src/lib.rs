@@ -5,10 +5,7 @@
 //!
 //! # Features
 //!
-//! Each filter primitive has a feature of the same name in kebab case, such as `gaussian-blur`,
-//! which enables its type. `all`, the default, enables every primitive, and `css-functions` enables
-//! the ones that `FilterFunction` needs. `serde` implements `Serialize` and `Deserialize` for every
-//! type.
+//! `serde` implements `Serialize` and `Deserialize` for every type.
 
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -18,22 +15,10 @@ extern crate alloc;
 
 mod color;
 mod filter;
-#[cfg(any(
-    feature = "gaussian-blur",
-    feature = "drop-shadow",
-    feature = "component-transfer",
-    feature = "color-matrix"
-))]
 mod filter_function;
 mod primitive;
 
 pub use color::{Color, ColorInterpolation};
 pub use filter::{Filter, Input, Node, Rect, Subregion};
-#[cfg(any(
-    feature = "gaussian-blur",
-    feature = "drop-shadow",
-    feature = "component-transfer",
-    feature = "color-matrix"
-))]
 pub use filter_function::FilterFunction;
 pub use primitive::*;

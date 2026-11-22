@@ -1,11 +1,5 @@
 use alloc::vec::Vec;
 
-#[cfg(any(
-    feature = "gaussian-blur",
-    feature = "drop-shadow",
-    feature = "component-transfer",
-    feature = "color-matrix"
-))]
 use crate::FilterFunction;
 use crate::{ColorInterpolation, Primitive};
 
@@ -92,7 +86,7 @@ impl<I> Filter<I> {
         for node in &self.nodes {
             // Missing attributes default to the union of the input subregions, or to the filter
             // region for nodes without inputs, with a standard input, and for `feTile`.
-            let uses_region = is_tile(&node.primitive)
+            let uses_region = matches!(node.primitive, Primitive::Tile(_))
                 || node
                     .inputs
                     .iter()
@@ -116,12 +110,6 @@ impl<I> Filter<I> {
     }
 
     /// The filter equivalent to a list of filter functions applied to content within `bounds`.
-    #[cfg(any(
-        feature = "gaussian-blur",
-        feature = "drop-shadow",
-        feature = "component-transfer",
-        feature = "color-matrix"
-    ))]
     pub fn from_functions(functions: &[FilterFunction], bounds: Rect) -> Self {
         let mut filter = Self::new(bounds);
         let mut input = Input::SourceGraphic;
@@ -223,7 +211,6 @@ impl Rect {
         }
     }
 
-    #[cfg(any(feature = "gaussian-blur", feature = "drop-shadow"))]
     pub(crate) fn outset(self, amount: f32) -> Self {
         Self::new(
             self.x - amount,
@@ -239,14 +226,6 @@ impl Rect {
         let x1 = (self.x + self.width).max(other.x + other.width);
         let y1 = (self.y + self.height).max(other.y + other.height);
         Self::new(x0, y0, x1 - x0, y1 - y0)
-    }
-}
-
-fn is_tile<I>(primitive: &Primitive<I>) -> bool {
-    match primitive {
-        #[cfg(feature = "tile")]
-        Primitive::Tile(_) => true,
-        _ => false,
     }
 }
 
@@ -270,7 +249,7 @@ impl<I> From<Nodes<I>> for Filter<I> {
     }
 }
 
-#[cfg(all(test, feature = "offset"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::Offset;
@@ -319,7 +298,7 @@ mod tests {
     }
 }
 
-#[cfg(all(test, feature = "serde", feature = "merge", feature = "offset"))]
+#[cfg(all(test, feature = "serde"))]
 mod serde_tests {
     use super::*;
     use crate::{Merge, Offset};
