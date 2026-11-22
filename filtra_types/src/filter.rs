@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use crate::FilterFunction;
 use crate::{ColorInterpolation, Primitive};
 
-/// A `filter` element: its region and its primitives.
+/// A `filter` element: its region and its primitives, with `I` the content of `feImage` nodes.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 // Deserializing goes through `push`, which keeps every reference pointing at an earlier node.

@@ -9,6 +9,9 @@ Filter effect kernels on premultiplied RGBA8 pixmaps.
 This crate provides SIMD-accelerated CPU kernels for each filter primitive defined in
 [Filter Effects Module Level 1](https://drafts.fxtf.org/filter-effects-1/).
 
+On WebAssembly, the kernels only use SIMD when compiled with the `simd128` target feature, for
+example with `RUSTFLAGS="-C target-feature=+simd128"`.
+
 ## License
 
 Licensed under either of

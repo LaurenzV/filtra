@@ -6,6 +6,9 @@
 //! Kernels work in a single coordinate space, in which every input is placed with
 //! [`Source::new`] and the output with [`Target::new`]. A kernel writes every pixel of its target;
 //! pixels outside of an input are transparent black.
+//!
+//! On WebAssembly, the kernels only use SIMD when compiled with the `simd128` target feature, for
+//! example with `RUSTFLAGS="-C target-feature=+simd128"`.
 
 #![forbid(unsafe_code)]
 

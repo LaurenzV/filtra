@@ -28,6 +28,30 @@
 //!
 //! filtra::apply(&mut backend, &filter, pixmap, transform, |_, _, _, _| {});
 //! ```
+//!
+//! # Applying a filter
+//!
+//! [`apply`] filters a target in place. The target holds the `SourceGraphic`: for [`cpu::Backend`],
+//! a [`cpu::PixmapMut`] of premultiplied sRGB RGBA8. Afterwards, it holds the result, and every
+//! pixel outside the filter region is transparent.
+//!
+//! The [`Transform`] maps the user space of the filter to the pixels of the target, and a negative
+//! scale flips an axis. Rotations and skews are left to the caller: apply the filter to content
+//! rendered without them, then draw the result with the rotation and skew that remain.
+//!
+//! For each `feImage` node the result needs, `apply` calls `render_image` with the node's content,
+//! its filter primitive subregion in user space, and the pixels to render the content into: a rect
+//! in the pixel space of the target, and a transparent buffer of that size, for [`cpu::Backend`] in
+//! premultiplied RGBA8.
+//!
+//! # Limitations
+//!
+//! - The `BackgroundImage`, `BackgroundAlpha`, `FillPaint` and `StrokePaint` inputs are not
+//!   supported.
+//! - `edgeMode` on `feGaussianBlur` is ignored, as is `kernelUnitLength` on `feConvolveMatrix`,
+//!   `feDiffuseLighting` and `feSpecularLighting`.
+//! - On WebAssembly, the kernels only use SIMD when compiled with the `simd128` target feature, for
+//!   example with `RUSTFLAGS="-C target-feature=+simd128"`.
 
 #![forbid(unsafe_code)]
 
