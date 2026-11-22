@@ -1,10 +1,10 @@
 use filtra_kernels::{Source, Target};
 
-use super::{Backend, PixmapMut};
+use super::{BufferPool, PixmapMut};
 use crate::IntRect;
 use crate::plan::{ImageId, Plan, Step};
 
-impl Backend {
+impl BufferPool {
     pub(crate) fn execute(
         &mut self,
         plan: &Plan,

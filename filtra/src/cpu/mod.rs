@@ -8,14 +8,14 @@ use std::fmt;
 
 pub use pixmap::PixmapMut;
 
-/// A reusable backend for applying filters on the CPU.
-pub struct Backend {
+/// Reusable memory for the intermediate images of [`apply`](crate::apply).
+pub struct BufferPool {
     buffers: Vec<Vec<u8>>,
     max_buffers: usize,
 }
 
-impl Backend {
-    /// Creates a backend that keeps up to `max_buffers` buffers between calls.
+impl BufferPool {
+    /// Creates an empty pool that keeps up to `max_buffers` buffers between calls.
     pub fn new(max_buffers: usize) -> Self {
         Self {
             buffers: Vec::new(),
@@ -52,9 +52,9 @@ impl Backend {
     }
 }
 
-impl fmt::Debug for Backend {
+impl fmt::Debug for BufferPool {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Backend")
+        f.debug_struct("BufferPool")
             .field("buffers", &self.buffers.len())
             .field("memory", &self.memory())
             .field("max_buffers", &self.max_buffers)
