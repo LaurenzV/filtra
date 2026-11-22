@@ -18,20 +18,22 @@ use filtra_types::TurbulenceType;
 use filtra_types::{ColorInterpolation, Filter, Input, Node, Primitive, Rect};
 
 #[cfg(feature = "convolve-matrix")]
-use crate::Convolution;
+use filtra_core::Convolution;
 #[cfg(feature = "turbulence")]
-use crate::Turbulence;
-use crate::{ColorSpace, ImageId, IntRect, Plan, Step, Transform};
+use filtra_core::Turbulence;
+use filtra_core::{ColorSpace, IntRect};
 #[cfg(any(feature = "diffuse-lighting", feature = "specular-lighting"))]
-use crate::{Light, Lighting, Reflection};
+use filtra_core::{Light, Lighting, Reflection};
+
+use crate::Transform;
+use crate::plan::{ImageId, Plan, Step};
 
 /// Plans `filter` for a source image covering `bounds`.
-pub fn plan<I>(filter: &Filter<I>, transform: Transform, bounds: IntRect) -> Plan {
+pub(crate) fn plan<I>(filter: &Filter<I>, transform: Transform, bounds: IntRect) -> Plan {
     let mut planner = Planner::new(filter, transform, bounds);
     let output = planner.plan_output();
 
     Plan {
-        source: planner.outputs[filter.nodes().len()].map(|source| source.image),
         steps: planner.steps,
         rects: planner.rects,
         output,
@@ -44,8 +46,6 @@ struct Planner<'a, I> {
     /// The filter region, clipped to the source.
     region: IntRect,
     subregions: Vec<Rect>,
-    /// The number of `feImage` nodes before each node.
-    images_before: Vec<usize>,
     /// The outputs of the nodes, followed by `SourceGraphic` and `SourceAlpha`.
     outputs: Vec<Option<Output>>,
     steps: Vec<Step>,
@@ -67,20 +67,11 @@ struct Output {
 impl<'a, I> Planner<'a, I> {
     fn new(filter: &'a Filter<I>, transform: Transform, bounds: IntRect) -> Self {
         let nodes = filter.nodes();
-        let images_before = (nodes.iter())
-            .scan(0, |count, node| {
-                let before = *count;
-                *count += usize::from(matches!(node.primitive, Primitive::Image(_)));
-                Some(before)
-            })
-            .collect();
-
         Self {
             nodes,
             transform,
             region: transform.covered_pixels(filter.region).intersect(&bounds),
             subregions: filter.subregions(),
-            images_before,
             outputs: vec![None; nodes.len() + 2],
             steps: Vec::new(),
             rects: Vec::new(),
@@ -176,10 +167,7 @@ impl<'a, I> Planner<'a, I> {
                 dst,
                 color: premultiplied_rgba8(flood.color.with_opacity(flood.opacity)),
             },
-            (Primitive::Image(_), []) => Step::Image {
-                dst,
-                image: self.images_before[index],
-            },
+            (Primitive::Image(_), []) => Step::Image { dst, node: index },
             #[cfg(feature = "offset")]
             (Primitive::Offset(offset), &[src]) => {
                 let [dx, dy] = self.offset(offset.dx, offset.dy);
@@ -441,7 +429,7 @@ impl<'a, I> Planner<'a, I> {
         dst
     }
 
-    #[cfg(any(feature = "offset", feature = "drop-shadow"))]
+    #[cfg(feature = "offset")]
     fn offset(&self, dx: f32, dy: f32) -> [i64; 2] {
         [
             (dx * self.transform.sx).round() as i64,
@@ -714,7 +702,6 @@ mod tests {
     use filtra_types::{Composite, Flood, Merge, Offset, Tile};
 
     use super::*;
-    use crate::Pass;
 
     const BOUNDS: IntRect = IntRect::new(0, 0, 100, 100);
     const IDENTITY: Transform = Transform::new(1.0, 1.0, 0.0, 0.0);
@@ -743,8 +730,7 @@ mod tests {
         else {
             unreachable!()
         };
-        assert_eq!(Some(src), plan.source);
-        assert!(source_alpha.reads().eq(plan.source));
+        assert!(source_alpha.reads().eq([src]));
 
         let Step::Composite {
             src,
