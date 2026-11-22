@@ -1,6 +1,6 @@
 //! Filter primitive feGaussianBlur (§9.14).
 
-use crate::{check, check_at};
+use crate::{check, check_at, check_flipped};
 
 #[test]
 fn default() {
@@ -10,6 +10,11 @@ fn default() {
 #[test]
 fn different_values() {
     check("gaussian_blur/different_values");
+}
+
+#[test]
+fn different_values_flipped() {
+    check_flipped("gaussian_blur/different_values");
 }
 
 #[test]

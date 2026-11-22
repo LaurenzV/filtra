@@ -4,7 +4,7 @@ use crate::dispatch::dispatch;
 use crate::simd::{for_each_output_chunk, pack, premultiply};
 use crate::{Target, Turbulence};
 
-/// `feTurbulence`, sampled at the top-left corner of each pixel.
+/// `feTurbulence`, sampled at the corner of each pixel with the smallest noise coordinates.
 pub fn turbulence(dst: Target<'_>, turbulence: &Turbulence) {
     let lattice = Lattice::new(turbulence.seed);
     let noise = Noise::new(turbulence);
@@ -205,29 +205,32 @@ struct Stitch {
 
 impl Noise {
     fn new(turbulence: &Turbulence) -> Self {
-        let origin = turbulence.origin.map(f64::from);
+        let mut origin = turbulence.origin.map(f64::from);
         let mut frequency = turbulence.base_frequency.map(f64::from);
         let octaves = turbulence.octaves.min(MAX_OCTAVES) as usize;
         let mut stitches = vec![None; octaves];
 
         if let Some(tile) = turbulence.stitch_tile {
-            let x = f64::from(tile.x0) - origin[0];
-            let y = f64::from(tile.y0) - origin[1];
-            let width = f64::from(tile.width());
-            let height = f64::from(tile.height());
+            let edges = [[tile.x0, tile.x1], [tile.y0, tile.y1]].map(|edges| edges.map(f64::from));
+            let size = edges.map(|[start, end]| end - start);
+            frequency = [0, 1].map(|axis| {
+                stitch_frequency(frequency[axis].abs(), size[axis]).copysign(frequency[axis])
+            });
 
-            frequency = [
-                stitch_frequency(frequency[0], width),
-                stitch_frequency(frequency[1], height),
-            ];
+            // A negative frequency flips the noise, which then starts at the far edge of the tile.
+            let [x, y] = [0, 1].map(|axis| {
+                let [start, end] = edges[axis].map(|edge| (edge - origin[axis]) * frequency[axis]);
+                start.min(end)
+            });
 
-            let width = (width * frequency[0] + 0.5) as i64;
-            let height = (height * frequency[1] + 0.5) as i64;
+            let [width, height] =
+                [0, 1].map(|axis| (size[axis] * frequency[axis].abs() + 0.5) as i64);
+
             let mut stitch = Stitch {
                 width,
                 height,
-                wrap_x: (x * frequency[0] + PERLIN_N + width as f64) as i64,
-                wrap_y: (y * frequency[1] + PERLIN_N + height as f64) as i64,
+                wrap_x: (x + PERLIN_N + width as f64) as i64,
+                wrap_y: (y + PERLIN_N + height as f64) as i64,
             };
 
             // The reference code's integers overflow for huge frequencies; these wrap instead.
@@ -239,6 +242,14 @@ impl Noise {
                     wrap_x: stitch.wrap_x.wrapping_mul(2).wrapping_sub(PERLIN_N as i64),
                     wrap_y: stitch.wrap_y.wrapping_mul(2).wrapping_sub(PERLIN_N as i64),
                 };
+            }
+        }
+
+        // Where the frequency is negative, the corner with the smallest noise coordinates is the
+        // right or bottom one.
+        for (origin, frequency) in origin.iter_mut().zip(frequency) {
+            if frequency < 0.0 {
+                *origin -= 1.0;
             }
         }
 

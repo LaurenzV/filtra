@@ -1,6 +1,6 @@
 //! Filter primitive feDisplacementMap (§9.11).
 
-use crate::check;
+use crate::{check, check_flipped};
 
 #[test]
 fn channels() {
@@ -15,6 +15,11 @@ fn default_channels() {
 #[test]
 fn half_pixel() {
     check("displacement_map/half_pixel");
+}
+
+#[test]
+fn half_pixel_flipped() {
+    check_flipped("displacement_map/half_pixel");
 }
 
 #[test]

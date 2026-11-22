@@ -124,7 +124,11 @@ fn shade<S: Simd>(
     let normal_x = -surface_scale * scale_x;
     let normal_y = -surface_scale * scale_y;
     let lanes = f32x8::from_slice(simd, &[0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]);
-    let user_y = (rect.y0 as f32 + y as f32 - lighting.origin[1]) / scale_y;
+    // Each pixel is lit at its corner with the smallest user-space coordinates, which is the
+    // right or bottom one where the scale is negative.
+    let [origin_x, origin_y] = [0, 1]
+        .map(|axis| lighting.origin[axis] - if lighting.scale[axis] < 0.0 { 1.0 } else { 0.0 });
+    let user_y = (rect.y0 as f32 + y as f32 - origin_y) / scale_y;
     let [red, green, blue] = lighting.color;
 
     for_each_output_chunk(output, {
@@ -139,7 +143,7 @@ fn shade<S: Simd>(
             let ny = load(slope_y, 0) * normal_y;
             let length = 1.0 / nx.mul_add(nx, ny.mul_add(ny, 1.0)).sqrt();
             let normal = [nx * length, ny * length, length];
-            let user_x = (lanes + (rect.x0 as f32 + x as f32 - lighting.origin[0])) / scale_x;
+            let user_x = (lanes + (rect.x0 as f32 + x as f32 - origin_x)) / scale_x;
             let point = [
                 user_x,
                 f32x8::splat(simd, user_y),
