@@ -22,3 +22,6 @@ convolve-matrix = ["dep:filtra_types", "filtra_types/convolve-matrix"]
 gaussian-blur = []
 lighting = []
 turbulence = []
+
+[lints]
+workspace = true

@@ -9,6 +9,9 @@ rust-version = "1.89"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/LaurenzV/filtra"
 
+[workspace.lints.rust]
+unreachable_pub = "warn"
+
 [workspace.dependencies]
 filtra = { version = "0.1.0", path = "filtra" }
 filtra_core = { version = "0.1.0", path = "filtra_core", default-features = false }

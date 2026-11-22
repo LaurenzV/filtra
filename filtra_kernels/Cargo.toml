@@ -13,6 +13,7 @@ repository.workspace = true
 all-features = true
 
 [lints.rust]
+unreachable_pub = "warn"
 # The `fearless_simd` flag to leave out the AVX2 versions of the kernels.
 unexpected_cfgs = { level = "warn", check-cfg = ["cfg(disable_dispatch_avx2)"] }
 
