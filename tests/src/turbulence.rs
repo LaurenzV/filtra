@@ -78,6 +78,11 @@ fn stitch() {
 }
 
 #[test]
+fn stitch_flipped() {
+    check("turbulence/stitch_flipped");
+}
+
+#[test]
 fn subregion() {
     check("turbulence/subregion");
 }

@@ -13,6 +13,11 @@ fn different_values() {
 }
 
 #[test]
+fn different_values_flipped() {
+    check("gaussian_blur/different_values_flipped");
+}
+
+#[test]
 fn empty_subregion() {
     check("gaussian_blur/empty_subregion");
 }

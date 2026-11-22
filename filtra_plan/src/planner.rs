@@ -230,8 +230,8 @@ impl<'a, I> Planner<'a, I> {
                 src,
                 dst,
                 operator: morphology.operator,
-                rx: (morphology.radius_x * self.transform.sx).round() as u32,
-                ry: (morphology.radius_y * self.transform.sy).round() as u32,
+                rx: (morphology.radius_x * self.transform.sx.abs()).round() as u32,
+                ry: (morphology.radius_y * self.transform.sy.abs()).round() as u32,
             },
             #[cfg(feature = "turbulence")]
             // Negative values are unsupported (§9.21), and an unsupported value invalidates the
@@ -321,7 +321,7 @@ impl<'a, I> Planner<'a, I> {
             },
             #[cfg(feature = "convolve-matrix")]
             (Primitive::ConvolveMatrix(convolution), &[src]) => {
-                match convolve_matrix(convolution) {
+                match convolve_matrix(convolution, self.transform) {
                     Some(convolution) => Step::ConvolveMatrix {
                         src,
                         dst,
@@ -460,15 +460,18 @@ impl Transform {
     fn covered_pixels(self, rect: Rect) -> IntRect {
         let Self { sx, sy, tx, ty } = self;
 
-        if !(rect.width > 0.0 && rect.height > 0.0 && sx > 0.0 && sy > 0.0) {
+        if !(rect.width > 0.0 && rect.height > 0.0 && sx.abs() > 0.0 && sy.abs() > 0.0) {
             return IntRect::default();
         }
 
+        let [x0, x1] = [rect.x, rect.x + rect.width].map(|x| x * sx + tx);
+        let [y0, y1] = [rect.y, rect.y + rect.height].map(|y| y * sy + ty);
+
         IntRect::new(
-            (rect.x * sx + tx).floor() as i32,
-            (rect.y * sy + ty).floor() as i32,
-            ((rect.x + rect.width) * sx + tx).ceil() as i32,
-            ((rect.y + rect.height) * sy + ty).ceil() as i32,
+            x0.min(x1).floor() as i32,
+            y0.min(y1).floor() as i32,
+            x0.max(x1).ceil() as i32,
+            y0.max(y1).ceil() as i32,
         )
     }
 }
@@ -512,7 +515,10 @@ fn matrix(color_matrix: &ColorMatrix) -> [f32; 20] {
 // TODO: `edgeMode` other than `none`.
 fn std_dev([x, y]: [f32; 2], transform: Transform) -> [f32; 2] {
     // A negative value disables the blur like zero does (§9.14), which browsers apply per axis.
-    [x.max(0.0) * transform.sx, y.max(0.0) * transform.sy]
+    [
+        x.max(0.0) * transform.sx.abs(),
+        y.max(0.0) * transform.sy.abs(),
+    ]
 }
 
 #[cfg(feature = "drop-shadow")]
@@ -613,23 +619,26 @@ fn srgb_to_linear(c: f32) -> f32 {
 
 #[cfg(feature = "convolve-matrix")]
 // TODO: `kernelUnitLength`, which is deprecated (§9.9).
-fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<Convolution> {
+fn convolve_matrix(convolution: &ConvolveMatrix, transform: Transform) -> Option<Convolution> {
     // An unsupported value invalidates its attribute ("Partial implementations"), which then
     // takes its initial value.
     let size = match [convolution.order_x, convolution.order_y] {
         [0, _] | [_, 0] => [3, 3],
         size => size,
     };
+    let flipped = [transform.sx < 0.0, transform.sy < 0.0];
     let target = [
-        (convolution.target_x, size[0]),
-        (convolution.target_y, size[1]),
+        (convolution.target_x, size[0], flipped[0]),
+        (convolution.target_y, size[1], flipped[1]),
     ]
-    .map(
-        |(target, len)| match target.and_then(|target| u32::try_from(target).ok()) {
+    .map(|(target, len, flipped)| {
+        let target = match target.and_then(|target| u32::try_from(target).ok()) {
             Some(target) if target < len => target,
             _ => len / 2,
-        },
-    );
+        };
+
+        if flipped { len - 1 - target } else { target }
+    });
 
     // A kernel matrix with the wrong number of entries makes the primitive a pass-through (§9.9).
     let len = u64::from(size[0]).checked_mul(u64::from(size[1]));
@@ -649,9 +658,19 @@ fn convolve_matrix(convolution: &ConvolveMatrix) -> Option<Convolution> {
         _ if sum == 0.0 => 1.0,
         _ => sum,
     };
-    // The kernel is rotated by 180° relative to the pixels it covers (§9.9).
-    let weights =
-        (convolution.kernel.iter().rev()).map(|&weight| (f64::from(weight) / divisor) as f32);
+    // The kernel is rotated by 180° relative to the pixels it covers (§9.9), which a flip of the
+    // pixels undoes along its axis.
+    let index = |i: usize, len: usize, flipped: bool| if flipped { i } else { len - 1 - i };
+    let [width, height] = size.map(|len| len as usize);
+    let weights = (0..height).flat_map(|row| {
+        let row = index(row, height, flipped[1]);
+
+        (0..width).map(move |column| {
+            let column = index(column, width, flipped[0]);
+
+            (f64::from(convolution.kernel[row * width + column]) / divisor) as f32
+        })
+    });
 
     Some(Convolution {
         size,

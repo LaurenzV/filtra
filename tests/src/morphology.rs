@@ -53,6 +53,11 @@ fn radius_xy() {
 }
 
 #[test]
+fn radius_xy_flipped() {
+    check("morphology/radius_xy_flipped");
+}
+
+#[test]
 fn region_edge() {
     check("morphology/region_edge");
 }

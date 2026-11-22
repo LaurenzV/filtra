@@ -73,6 +73,11 @@ fn subregion_fractional() {
 }
 
 #[test]
+fn subregion_fractional_flipped() {
+    check("flood/subregion_fractional_flipped");
+}
+
+#[test]
 fn subregion_huge() {
     check("flood/subregion_huge");
 }

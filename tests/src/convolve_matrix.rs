@@ -228,6 +228,11 @@ fn target_y() {
 }
 
 #[test]
+fn target_y_flipped() {
+    check("convolve_matrix/target_y_flipped");
+}
+
+#[test]
 fn vertical_mirror() {
     check("convolve_matrix/vertical_mirror");
 }

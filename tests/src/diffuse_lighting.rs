@@ -43,6 +43,11 @@ fn point() {
 }
 
 #[test]
+fn point_flipped() {
+    check("diffuse_lighting/point_flipped");
+}
+
+#[test]
 fn point_on_surface() {
     check("diffuse_lighting/point_on_surface");
 }

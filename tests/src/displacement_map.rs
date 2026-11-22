@@ -18,6 +18,11 @@ fn half_pixel() {
 }
 
 #[test]
+fn half_pixel_flipped() {
+    check("displacement_map/half_pixel_flipped");
+}
+
+#[test]
 fn huge_scale() {
     check("displacement_map/huge_scale");
 }
