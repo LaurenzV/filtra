@@ -3,7 +3,8 @@
 Each test is an SVG file in `svg/`. Its shapes are rendered with Vello CPU, its filter is applied
 with filtra, and the result, composited onto white, must have the same pixels as the image at the
 same path in `references/`. Tests in `transform/` are rendered at twice the size of the SVG; all
-others at their size.
+others at their size. Tests ending in `_flipped` render their SVG flipped along both axes, and have
+references of their own.
 
 ```bash
 cargo test -p filtra_tests

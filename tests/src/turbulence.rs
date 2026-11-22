@@ -1,6 +1,6 @@
 //! Filter primitive feTurbulence (§9.21).
 
-use crate::check;
+use crate::{check, check_flipped};
 
 #[test]
 fn anisotropic() {
@@ -75,6 +75,11 @@ fn srgb() {
 #[test]
 fn stitch() {
     check("turbulence/stitch");
+}
+
+#[test]
+fn stitch_flipped() {
+    check_flipped("turbulence/stitch");
 }
 
 #[test]

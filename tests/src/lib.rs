@@ -50,9 +50,24 @@ fn check(name: &str) {
 }
 
 fn check_at(name: &str, scale: u32) {
-    let text = std::fs::read_to_string(path(&format!("svg/{name}.svg"))).unwrap();
-    let actual = on_white(render(&svg::parse(&text), scale));
-    let reference = path(&format!("references/{name}.png"));
+    let scale = scale as f32;
+    check_with(name, name, Transform::new(scale, scale, 0.0, 0.0));
+}
+
+fn check_flipped(name: &str) {
+    let document = document(name);
+    let (width, height) = (document.width as f32, document.height as f32);
+
+    check_with(
+        name,
+        &format!("{name}_flipped"),
+        Transform::new(-1.0, -1.0, width, height),
+    );
+}
+
+fn check_with(name: &str, reference_name: &str, transform: Transform) {
+    let actual = on_white(render(&document(name), transform));
+    let reference = path(&format!("references/{reference_name}.png"));
 
     if std::env::var_os(REPLACE).is_some() {
         std::fs::create_dir_all(reference.parent().unwrap()).unwrap();
@@ -72,26 +87,40 @@ fn check_at(name: &str, scale: u32) {
     if !matches {
         let result = path(&format!(
             "../target/filtra-diffs/{}.png",
-            name.replace('/', "_")
+            reference_name.replace('/', "_")
         ));
         std::fs::create_dir_all(result.parent().unwrap()).unwrap();
         std::fs::write(&result, actual.into_png().unwrap()).unwrap();
 
         panic!(
-            "{name} differs from {}; got {} ({REPLACE}=1 replaces the reference)",
+            "{reference_name} differs from {}; got {} ({REPLACE}=1 replaces the reference)",
             reference.display(),
             result.display()
         );
     }
 }
 
-fn render(document: &Document, scale: u32) -> Pixmap {
-    let (width, height) = (document.width * scale, document.height * scale);
-    let scale_transform = Affine::scale(f64::from(scale));
-    let mut data = rasterize(&document.shapes, width, height, scale_transform);
+fn document(name: &str) -> Document {
+    svg::parse(&std::fs::read_to_string(path(&format!("svg/{name}.svg"))).unwrap())
+}
+
+fn render(document: &Document, transform: Transform) -> Pixmap {
+    let width = (document.width as f32 * transform.sx.abs()) as u32;
+    let height = (document.height as f32 * transform.sy.abs()) as u32;
+    let user_to_pixels = Affine::new(
+        [
+            transform.sx,
+            0.0,
+            0.0,
+            transform.sy,
+            transform.tx,
+            transform.ty,
+        ]
+        .map(f64::from),
+    );
+    let mut data = rasterize(&document.shapes, width, height, user_to_pixels);
 
     if let Some(filter) = &document.filter {
-        let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
         BACKEND.with_borrow_mut(|backend| {
             filtra::apply(
                 backend,
@@ -101,7 +130,7 @@ fn render(document: &Document, scale: u32) -> Pixmap {
                 |shapes, subregion, rect, data| {
                     // Like `<use>`, a referenced element is placed at the subregion's origin.
                     let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
-                        * scale_transform
+                        * user_to_pixels
                         * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
                     let image = rasterize(shapes, rect.width(), rect.height(), placement);
 
