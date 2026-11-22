@@ -30,9 +30,9 @@ filter.push(Node::new(Primitive::Merge(Merge), [shadow, Input::SourceGraphic]));
 let mut pixels = vec![0; 200 * 200 * 4];
 let pixmap = PixmapMut::from_data(&mut pixels, 200, 200);
 let transform = Transform::new(2.0, 2.0, 0.0, 0.0);
-let mut backend = cpu::Backend::new(4);
+let mut pool = cpu::BufferPool::new(4);
 
-filtra::apply(&mut backend, &filter, pixmap, transform, |_, _, _, _| {});
+filtra::apply(&filter, pixmap, &mut pool, transform, |_, _, _, _| {});
 ```
 
 ## Applying a filter

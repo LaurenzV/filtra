@@ -24,9 +24,9 @@
 //! let mut pixels = vec![0; 200 * 200 * 4];
 //! let pixmap = PixmapMut::from_data(&mut pixels, 200, 200);
 //! let transform = Transform::new(2.0, 2.0, 0.0, 0.0);
-//! let mut backend = cpu::Backend::new(4);
+//! let mut pool = cpu::BufferPool::new(4);
 //!
-//! filtra::apply(&mut backend, &filter, pixmap, transform, |_, _, _, _| {});
+//! filtra::apply(&filter, pixmap, &mut pool, transform, |_, _, _, _| {});
 //! ```
 //!
 //! # Applying a filter
@@ -70,16 +70,16 @@ pub use filtra_types as types;
 
 /// Applies `filter` to `target` in place, with `transform` mapping user space to its pixels.
 pub fn apply<I>(
-    backend: &mut cpu::Backend,
     filter: &types::Filter<I>,
     target: cpu::PixmapMut<'_>,
+    pool: &mut cpu::BufferPool,
     transform: Transform,
     mut render_image: impl FnMut(&I, types::Rect, IntRect, &mut [u8]),
 ) {
     let plan = plan::plan(filter, transform, target.bounds());
     let subregions = filter.subregions();
 
-    backend.execute(&plan, target, &mut |node, rect, data| {
+    pool.execute(&plan, target, &mut |node, rect, data| {
         if let types::Primitive::Image(image) = &filter.nodes()[node].primitive {
             render_image(image, subregions[node], rect, data);
         }

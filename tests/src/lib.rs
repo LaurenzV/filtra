@@ -98,11 +98,11 @@ fn render(document: &Document) -> Pixmap {
     let mut data = rasterize(&document.shapes, width, height, user_to_pixels);
 
     if let Some(filter) = &document.filter {
-        BACKEND.with_borrow_mut(|backend| {
+        POOL.with_borrow_mut(|pool| {
             filtra::apply(
-                backend,
                 filter,
                 cpu::PixmapMut::from_data(&mut data, width, height),
+                pool,
                 transform,
                 |shapes, subregion, rect, data| {
                     // Like `<use>`, a referenced element is placed at the subregion's origin.
@@ -123,7 +123,7 @@ fn render(document: &Document) -> Pixmap {
 
 thread_local! {
     // Shared between tests, so that they run on buffers that hold the images of other tests.
-    static BACKEND: RefCell<cpu::Backend> = RefCell::new(cpu::Backend::new(4));
+    static POOL: RefCell<cpu::BufferPool> = RefCell::new(cpu::BufferPool::new(4));
 }
 
 fn draw_over(data: &mut [u8], image: &[u8]) {
