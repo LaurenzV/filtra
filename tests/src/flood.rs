@@ -1,6 +1,6 @@
 //! Filter primitive feFlood (§9.13).
 
-use crate::{check, check_flipped};
+use crate::check;
 
 #[test]
 fn color() {
@@ -74,7 +74,7 @@ fn subregion_fractional() {
 
 #[test]
 fn subregion_fractional_flipped() {
-    check_flipped("flood/subregion_fractional");
+    check("flood/subregion_fractional_flipped");
 }
 
 #[test]

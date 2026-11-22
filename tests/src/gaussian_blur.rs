@@ -1,6 +1,6 @@
 //! Filter primitive feGaussianBlur (§9.14).
 
-use crate::{check, check_at, check_flipped};
+use crate::check;
 
 #[test]
 fn default() {
@@ -14,7 +14,7 @@ fn different_values() {
 
 #[test]
 fn different_values_flipped() {
-    check_flipped("gaussian_blur/different_values");
+    check("gaussian_blur/different_values_flipped");
 }
 
 #[test]
@@ -34,7 +34,7 @@ fn huge() {
 
 #[test]
 fn infinite() {
-    check_at("gaussian_blur/infinite", 2);
+    check("gaussian_blur/infinite");
 }
 
 #[test]

@@ -1,63 +1,63 @@
-//! The mapping from user space to pixels, at twice the size of the SVG.
+//! The mapping from user space to pixels, with the content scaled to twice its size.
 
-use crate::check_at;
+use crate::check;
 
 #[test]
 fn blur() {
-    check_at("transform/blur", 2);
+    check("transform/blur");
 }
 
 #[test]
 fn convolve_matrix() {
-    check_at("transform/convolve_matrix", 2);
+    check("transform/convolve_matrix");
 }
 
 #[test]
 fn displacement_map() {
-    check_at("transform/displacement_map", 2);
+    check("transform/displacement_map");
 }
 
 #[test]
 fn drop_shadow() {
-    check_at("transform/drop_shadow", 2);
+    check("transform/drop_shadow");
 }
 
 #[test]
 fn image() {
-    check_at("transform/image", 2);
+    check("transform/image");
 }
 
 #[test]
 fn lighting() {
-    check_at("transform/lighting", 2);
+    check("transform/lighting");
 }
 
 #[test]
 fn lighting_spot() {
-    check_at("transform/lighting_spot", 2);
+    check("transform/lighting_spot");
 }
 
 #[test]
 fn morphology() {
-    check_at("transform/morphology", 2);
+    check("transform/morphology");
 }
 
 #[test]
 fn offset() {
-    check_at("transform/offset", 2);
+    check("transform/offset");
 }
 
 #[test]
 fn subregion() {
-    check_at("transform/subregion", 2);
+    check("transform/subregion");
 }
 
 #[test]
 fn tile() {
-    check_at("transform/tile", 2);
+    check("transform/tile");
 }
 
 #[test]
 fn turbulence() {
-    check_at("transform/turbulence", 2);
+    check("transform/turbulence");
 }

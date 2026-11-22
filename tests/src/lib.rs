@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use filtra::{Transform, cpu};
+use filtra::cpu;
 use vello_cpu::color::palette::css::WHITE;
 use vello_cpu::kurbo::{Affine, Rect};
 use vello_cpu::peniko::color::AlphaColor;
@@ -46,28 +46,9 @@ use svg::{Document, Shape};
 const REPLACE: &str = "FILTRA_REPLACE";
 
 fn check(name: &str) {
-    check_at(name, 1);
-}
-
-fn check_at(name: &str, scale: u32) {
-    let scale = scale as f32;
-    check_with(name, name, Transform::new(scale, scale, 0.0, 0.0));
-}
-
-fn check_flipped(name: &str) {
-    let document = document(name);
-    let (width, height) = (document.width as f32, document.height as f32);
-
-    check_with(
-        name,
-        &format!("{name}_flipped"),
-        Transform::new(-1.0, -1.0, width, height),
-    );
-}
-
-fn check_with(name: &str, reference_name: &str, transform: Transform) {
-    let actual = on_white(render(&document(name), transform));
-    let reference = path(&format!("references/{reference_name}.png"));
+    let text = std::fs::read_to_string(path(&format!("svg/{name}.svg"))).unwrap();
+    let actual = on_white(render(&svg::parse(&text)));
+    let reference = path(&format!("references/{name}.png"));
 
     if std::env::var_os(REPLACE).is_some() {
         std::fs::create_dir_all(reference.parent().unwrap()).unwrap();
@@ -87,26 +68,22 @@ fn check_with(name: &str, reference_name: &str, transform: Transform) {
     if !matches {
         let result = path(&format!(
             "../target/filtra-diffs/{}.png",
-            reference_name.replace('/', "_")
+            name.replace('/', "_")
         ));
         std::fs::create_dir_all(result.parent().unwrap()).unwrap();
         std::fs::write(&result, actual.into_png().unwrap()).unwrap();
 
         panic!(
-            "{reference_name} differs from {}; got {} ({REPLACE}=1 replaces the reference)",
+            "{name} differs from {}; got {} ({REPLACE}=1 replaces the reference)",
             reference.display(),
             result.display()
         );
     }
 }
 
-fn document(name: &str) -> Document {
-    svg::parse(&std::fs::read_to_string(path(&format!("svg/{name}.svg"))).unwrap())
-}
-
-fn render(document: &Document, transform: Transform) -> Pixmap {
-    let width = (document.width as f32 * transform.sx.abs()) as u32;
-    let height = (document.height as f32 * transform.sy.abs()) as u32;
+fn render(document: &Document) -> Pixmap {
+    let (width, height) = (document.width, document.height);
+    let transform = document.transform;
     let user_to_pixels = Affine::new(
         [
             transform.sx,
