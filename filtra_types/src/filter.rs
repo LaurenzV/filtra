@@ -186,6 +186,17 @@ impl Subregion {
     }
 }
 
+impl From<Rect> for Subregion {
+    fn from(rect: Rect) -> Self {
+        Self {
+            x: Some(rect.x),
+            y: Some(rect.y),
+            width: Some(rect.width),
+            height: Some(rect.height),
+        }
+    }
+}
+
 /// A rectangle in user space.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -211,6 +222,11 @@ impl Rect {
         }
     }
 
+    /// Creates a rectangle from its left, top, right and bottom edges.
+    pub const fn from_ltrb(left: f32, top: f32, right: f32, bottom: f32) -> Self {
+        Self::new(left, top, right - left, bottom - top)
+    }
+
     pub(crate) fn outset(self, amount: f32) -> Self {
         Self::new(
             self.x - amount,
@@ -225,7 +241,7 @@ impl Rect {
         let y0 = self.y.min(other.y);
         let x1 = (self.x + self.width).max(other.x + other.width);
         let y1 = (self.y + self.height).max(other.y + other.height);
-        Self::new(x0, y0, x1 - x0, y1 - y0)
+        Self::from_ltrb(x0, y0, x1, y1)
     }
 }
 
