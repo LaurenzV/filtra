@@ -30,7 +30,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use filtra::{Transform, cpu};
+use filtra::cpu;
 use vello_cpu::color::palette::css::WHITE;
 use vello_cpu::kurbo::{Affine, Rect};
 use vello_cpu::peniko::color::AlphaColor;
@@ -46,12 +46,8 @@ use svg::{Document, Shape};
 const REPLACE: &str = "FILTRA_REPLACE";
 
 fn check(name: &str) {
-    check_at(name, 1);
-}
-
-fn check_at(name: &str, scale: u32) {
     let text = std::fs::read_to_string(path(&format!("svg/{name}.svg"))).unwrap();
-    let actual = on_white(render(&svg::parse(&text), scale));
+    let actual = on_white(render(&svg::parse(&text)));
     let reference = path(&format!("references/{name}.png"));
 
     if std::env::var_os(REPLACE).is_some() {
@@ -85,13 +81,23 @@ fn check_at(name: &str, scale: u32) {
     }
 }
 
-fn render(document: &Document, scale: u32) -> Pixmap {
-    let (width, height) = (document.width * scale, document.height * scale);
-    let scale_transform = Affine::scale(f64::from(scale));
-    let mut data = rasterize(&document.shapes, width, height, scale_transform);
+fn render(document: &Document) -> Pixmap {
+    let (width, height) = (document.width, document.height);
+    let transform = document.transform;
+    let user_to_pixels = Affine::new(
+        [
+            transform.sx,
+            0.0,
+            0.0,
+            transform.sy,
+            transform.tx,
+            transform.ty,
+        ]
+        .map(f64::from),
+    );
+    let mut data = rasterize(&document.shapes, width, height, user_to_pixels);
 
     if let Some(filter) = &document.filter {
-        let transform = Transform::new(scale as f32, scale as f32, 0.0, 0.0);
         BACKEND.with_borrow_mut(|backend| {
             filtra::apply(
                 backend,
@@ -101,7 +107,7 @@ fn render(document: &Document, scale: u32) -> Pixmap {
                 |shapes, subregion, rect, data| {
                     // Like `<use>`, a referenced element is placed at the subregion's origin.
                     let placement = Affine::translate((-f64::from(rect.x0), -f64::from(rect.y0)))
-                        * scale_transform
+                        * user_to_pixels
                         * Affine::translate((f64::from(subregion.x), f64::from(subregion.y)));
                     let image = rasterize(shapes, rect.width(), rect.height(), placement);
 

@@ -1,6 +1,6 @@
 //! Filter primitive feGaussianBlur (§9.14).
 
-use crate::{check, check_at};
+use crate::check;
 
 #[test]
 fn default() {
@@ -29,7 +29,7 @@ fn huge() {
 
 #[test]
 fn infinite() {
-    check_at("gaussian_blur/infinite", 2);
+    check("gaussian_blur/infinite");
 }
 
 #[test]
