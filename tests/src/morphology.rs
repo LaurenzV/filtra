@@ -1,6 +1,6 @@
 //! Filter primitive feMorphology (§9.17).
 
-use crate::{check, check_flipped};
+use crate::check;
 
 #[test]
 fn below_half() {
@@ -54,7 +54,7 @@ fn radius_xy() {
 
 #[test]
 fn radius_xy_flipped() {
-    check_flipped("morphology/radius_xy");
+    check("morphology/radius_xy_flipped");
 }
 
 #[test]

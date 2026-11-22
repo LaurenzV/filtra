@@ -1,6 +1,6 @@
 //! Filter primitive feDiffuseLighting (§9.10).
 
-use crate::{check, check_flipped};
+use crate::check;
 
 #[test]
 fn color() {
@@ -44,7 +44,7 @@ fn point() {
 
 #[test]
 fn point_flipped() {
-    check_flipped("diffuse_lighting/point");
+    check("diffuse_lighting/point_flipped");
 }
 
 #[test]

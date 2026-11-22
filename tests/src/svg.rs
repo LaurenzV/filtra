@@ -1,6 +1,8 @@
 //! A parser for the minimal SVG subset of the test files: shapes with solid fills in one `<g>`,
-//! filtered either by one `<filter>` in user space or by a list of filter functions.
+//! filtered either by one `<filter>` in user space or by a list of filter functions, and optionally
+//! inside an outer `<g>` whose `transform` scales or flips them.
 
+use filtra::Transform;
 use filtra::types::{
     Blend, BlendMode, Color, ColorChannel, ColorInterpolation, ColorMatrix, ComponentTransfer,
     Composite, CompositeOperator, ConvolveMatrix, DiffuseLighting, DisplacementMap, DistantLight,
@@ -14,6 +16,7 @@ use vello_cpu::kurbo::{self, BezPath, Circle, Shape as _};
 pub(crate) struct Document {
     pub(crate) width: u32,
     pub(crate) height: u32,
+    pub(crate) transform: Transform,
     pub(crate) shapes: Vec<Shape>,
     pub(crate) filter: Option<Filter<Image>>,
 }
@@ -36,8 +39,14 @@ pub(crate) fn parse(text: &str) -> Document {
         })
         .filter_map(shape)
         .collect();
-    let group = root.descendants().find(|node| node.has_tag_name("g"));
+    let group =
+        (root.descendants()).find(|node| node.has_tag_name("g") && node.has_attribute("filter"));
     let element = root.descendants().find(|node| node.has_tag_name("filter"));
+    let transform = (root.children())
+        .find(|node| node.has_tag_name("g") && node.has_attribute("transform"))
+        .map_or(Transform::new(1.0, 1.0, 0.0, 0.0), |node| {
+            transform(attribute(node, "transform"))
+        });
 
     let filter = group.map(|group| match element {
         Some(element) => filter(element),
@@ -47,8 +56,25 @@ pub(crate) fn parse(text: &str) -> Document {
     Document {
         width: number(root, "width") as u32,
         height: number(root, "height") as u32,
+        transform,
         shapes,
         filter,
+    }
+}
+
+fn transform(value: &str) -> Transform {
+    let (function, arguments) = value
+        .trim()
+        .strip_suffix(')')
+        .and_then(|value| value.split_once('('))
+        .expect("invalid transform");
+    let values = numbers(arguments);
+
+    match (function.trim(), values.as_slice()) {
+        ("scale", &[s]) => Transform::new(s, s, 0.0, 0.0),
+        ("scale", &[sx, sy]) => Transform::new(sx, sy, 0.0, 0.0),
+        ("matrix", &[a, 0.0, 0.0, d, e, f]) => Transform::new(a, d, e, f),
+        _ => panic!("unsupported transform `{value}`"),
     }
 }
 

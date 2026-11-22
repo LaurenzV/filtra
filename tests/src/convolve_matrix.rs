@@ -1,6 +1,6 @@
 //! Filter primitive feConvolveMatrix (§9.9).
 
-use crate::{check, check_flipped};
+use crate::check;
 
 #[test]
 fn bias() {
@@ -229,7 +229,7 @@ fn target_y() {
 
 #[test]
 fn target_y_flipped() {
-    check_flipped("convolve_matrix/target_y");
+    check("convolve_matrix/target_y_flipped");
 }
 
 #[test]
