@@ -1,9 +1,10 @@
+use std::fmt;
+
 use filtra_kernels::{Source, Target};
 
 use crate::IntRect;
 
 /// Premultiplied RGBA8 pixels borrowed from elsewhere, stored row by row.
-#[derive(Debug)]
 pub struct PixmapMut<'a> {
     width: u32,
     height: u32,
@@ -46,5 +47,14 @@ impl<'a> PixmapMut<'a> {
 
     pub(super) fn target(&mut self) -> Target<'_> {
         Target::new(self.data, self.width, self.height, 0, 0)
+    }
+}
+
+impl fmt::Debug for PixmapMut<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PixmapMut")
+            .field("width", &self.width)
+            .field("height", &self.height)
+            .finish_non_exhaustive()
     }
 }

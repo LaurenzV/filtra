@@ -4,11 +4,11 @@ mod executor;
 mod pixmap;
 
 use std::cmp::Reverse;
+use std::fmt;
 
 pub use pixmap::PixmapMut;
 
 /// A reusable backend for applying filters on the CPU.
-#[derive(Debug)]
 pub struct Backend {
     buffers: Vec<Vec<u8>>,
     max_buffers: usize,
@@ -49,5 +49,15 @@ impl Backend {
         self.buffers
             .sort_unstable_by_key(|buffer| Reverse(buffer.capacity()));
         self.buffers.truncate(self.max_buffers);
+    }
+}
+
+impl fmt::Debug for Backend {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Backend")
+            .field("buffers", &self.buffers.len())
+            .field("memory", &self.memory())
+            .field("max_buffers", &self.max_buffers)
+            .finish()
     }
 }

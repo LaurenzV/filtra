@@ -58,6 +58,12 @@ pixel space of the target, and a transparent buffer of that size in premultiplie
 - On WebAssembly, the kernels only use SIMD when compiled with the `simd128` target feature, for
   example with `RUSTFLAGS="-C target-feature=+simd128"`.
 
+## Features
+
+Each filter primitive has a feature of the same name in kebab case, such as `gaussian-blur`, which
+enables it in `types` and in `apply`. `all`, the default, enables every primitive, and `css-
+functions` enables the ones that filter functions need.
+
 ## License
 
 Licensed under either of
