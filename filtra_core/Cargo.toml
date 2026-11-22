@@ -18,7 +18,7 @@ filtra_types = { workspace = true, optional = true }
 [features]
 default = ["all"]
 all = ["convolve-matrix", "gaussian-blur", "lighting", "turbulence"]
-convolve-matrix = ["dep:filtra_types", "filtra_types/convolve-matrix"]
+convolve-matrix = ["dep:filtra_types"]
 gaussian-blur = []
 lighting = []
 turbulence = []
